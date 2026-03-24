@@ -27,10 +27,12 @@ namespace AsylumHorror.Core
         [SyncVar(hook = nameof(OnKeycardChanged))] private bool keycardCollected;
         [SyncVar(hook = nameof(OnPowerChanged))] private bool powerRestored;
         [SyncVar(hook = nameof(OnExitChanged))] private bool exitOpened;
+        [SyncVar(hook = nameof(OnRouteChanged))] private RoundRouteKind activeRouteKind;
         [SyncVar(hook = nameof(OnRoundOverSyncChanged))] private bool isRoundOver;
         [SyncVar] private bool didPlayersWin;
         [SyncVar] private int escapedPlayers;
         [SyncVar] private double returnToLobbyAtNetworkTime;
+        [SyncVar(hook = nameof(OnRoundStartedChanged))] private double roundStartedAtNetworkTime;
 
         private ExitDoorTask exitDoor;
 
@@ -41,6 +43,33 @@ namespace AsylumHorror.Core
         public bool ExitOpened => exitOpened;
         public bool IsRoundOver => isRoundOver;
         public bool DidPlayersWin => didPlayersWin;
+        public RoundRouteKind ActiveRouteKind => activeRouteKind;
+        public float RoundElapsedSeconds =>
+            roundStartedAtNetworkTime <= 0d
+                ? 0f
+                : Mathf.Max(0f, (float)(NetworkTime.time - roundStartedAtNetworkTime));
+        public RoundObjectivePhase CurrentObjectivePhase
+        {
+            get
+            {
+                if (generatorsCompleted < requiredGenerators)
+                {
+                    return RoundObjectivePhase.RestoreAuxiliaryPower;
+                }
+
+                if (exitOpened)
+                {
+                    return RoundObjectivePhase.Escape;
+                }
+
+                if (!keycardCollected)
+                {
+                    return RoundObjectivePhase.FindAccessKey;
+                }
+
+                return powerRestored ? RoundObjectivePhase.Escape : RoundObjectivePhase.RestoreMainPower;
+            }
+        }
 
         public bool AreCoreTasksCompleted =>
             generatorsCompleted >= requiredGenerators &&
@@ -91,6 +120,7 @@ namespace AsylumHorror.Core
             didPlayersWin = false;
             isRoundOver = false;
             returnToLobbyAtNetworkTime = 0;
+            roundStartedAtNetworkTime = NetworkTime.time;
 
             if (roundRandomizer == null)
             {
@@ -145,6 +175,12 @@ namespace AsylumHorror.Core
         public void ServerRegisterExitDoor(ExitDoorTask doorTask)
         {
             exitDoor = doorTask;
+        }
+
+        [Server]
+        public void ServerSetActiveRoute(RoundRouteKind routeKind)
+        {
+            activeRouteKind = routeKind;
         }
 
         [Server]
@@ -233,12 +269,13 @@ namespace AsylumHorror.Core
 
         public string BuildObjectivesText()
         {
-            string objective1 = $"Generators: {generatorsCompleted}/{requiredGenerators}";
-            string objective2 = $"Keycard: {(keycardCollected ? "Found" : "Missing")}";
-            string objective3 = $"Power Restore: {(powerRestored ? "Done" : "Pending")}";
-            string objective4 = $"Main Exit: {(exitOpened ? "OPEN" : "LOCKED")}";
-            string objective5 = "Goal: At least one survivor escapes";
-            return $"{objective1}\n{objective2}\n{objective3}\n{objective4}\n{objective5}";
+            string directive = BuildDirectiveLine();
+            string clue = BuildClueLine();
+            string progress = BuildProgressLine();
+
+            return string.IsNullOrWhiteSpace(progress)
+                ? $"{directive}\n{clue}"
+                : $"{directive}\n{clue}\n{progress}";
         }
 
         [Server]
@@ -273,6 +310,8 @@ namespace AsylumHorror.Core
         private void OnKeycardChanged(bool _, bool __) => ObjectivesChanged?.Invoke();
         private void OnPowerChanged(bool _, bool __) => ObjectivesChanged?.Invoke();
         private void OnExitChanged(bool _, bool __) => ObjectivesChanged?.Invoke();
+        private void OnRouteChanged(RoundRouteKind _, RoundRouteKind __) => ObjectivesChanged?.Invoke();
+        private void OnRoundStartedChanged(double _, double __) => ObjectivesChanged?.Invoke();
 
         private void OnRoundOverSyncChanged(bool _, bool currentValue)
         {
@@ -280,6 +319,86 @@ namespace AsylumHorror.Core
             {
                 RoundEnded?.Invoke(didPlayersWin);
             }
+        }
+
+        private string BuildDirectiveLine()
+        {
+            return CurrentObjectivePhase switch
+            {
+                RoundObjectivePhase.RestoreAuxiliaryPower => "Directive: Restart auxiliary power",
+                RoundObjectivePhase.FindAccessKey => "Directive: Find staff clearance",
+                RoundObjectivePhase.RestoreMainPower => "Directive: Route power to the main lock",
+                RoundObjectivePhase.Escape => "Directive: Get someone to the front breach",
+                _ => "Directive: Stay alive"
+            };
+        }
+
+        private string BuildClueLine()
+        {
+            return CurrentObjectivePhase switch
+            {
+                RoundObjectivePhase.RestoreAuxiliaryPower => $"Clue: {ResolveRouteStartClue()}",
+                RoundObjectivePhase.FindAccessKey => $"Clue: {ResolveKeycardClue()}",
+                RoundObjectivePhase.RestoreMainPower => $"Clue: {ResolvePowerClue()}",
+                RoundObjectivePhase.Escape => "Clue: The route back north is open, but no space stays safe for long",
+                _ => "Clue: Listen before you move"
+            };
+        }
+
+        private string BuildProgressLine()
+        {
+            return CurrentObjectivePhase switch
+            {
+                RoundObjectivePhase.RestoreAuxiliaryPower => BuildGeneratorPressureLine(),
+                RoundObjectivePhase.FindAccessKey => "Keep noise low. Closed sections still want the card.",
+                RoundObjectivePhase.RestoreMainPower => "The final lock is still dead.",
+                RoundObjectivePhase.Escape => "The breach is open. Moving first matters more than moving fast.",
+                _ => string.Empty
+            };
+        }
+
+        private string BuildGeneratorPressureLine()
+        {
+            int remaining = Mathf.Max(0, requiredGenerators - generatorsCompleted);
+            return remaining switch
+            {
+                0 => "Auxiliary breakers are holding. The deeper lock can wake now.",
+                1 => "One more breaker has to hold.",
+                _ => "Most of the wing is still dead."
+            };
+        }
+
+        private string ResolveRouteStartClue()
+        {
+            return activeRouteKind switch
+            {
+                RoundRouteKind.WestDescent => "Take the west offices and records wing first",
+                RoundRouteKind.EastDescent => "Push through the east wards and operating wing",
+                RoundRouteKind.CrossCurrent => "Split the central hall and wake both mid wings",
+                _ => "Feel out the nearest live corridor"
+            };
+        }
+
+        private string ResolveKeycardClue()
+        {
+            return activeRouteKind switch
+            {
+                RoundRouteKind.WestDescent => "Security clearance was abandoned somewhere along the west route",
+                RoundRouteKind.EastDescent => "Look for clearance along the east medical offices",
+                RoundRouteKind.CrossCurrent => "The master card should still be near the front watch post",
+                _ => "The card was not left far from the staffed wing"
+            };
+        }
+
+        private string ResolvePowerClue()
+        {
+            return activeRouteKind switch
+            {
+                RoundRouteKind.WestDescent => "Follow the west service lines to the breaker cage",
+                RoundRouteKind.EastDescent => "The east maintenance switchboard still has life in it",
+                RoundRouteKind.CrossCurrent => "The central relay sits past the southern cross-corridor",
+                _ => "The final relay is deeper than the first locks"
+            };
         }
     }
 }

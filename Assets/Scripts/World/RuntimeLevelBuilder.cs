@@ -7,7 +7,7 @@ namespace AsylumHorror.World
     public class RuntimeLevelBuilder : MonoBehaviour
     {
         [Header("Build")]
-        [SerializeField] private bool buildOnStart = true;
+        [SerializeField] private bool buildOnStart = false;
         [SerializeField] private Material floorMaterial;
         [SerializeField] private Material wallMaterial;
         [SerializeField] private PhysicsMaterial floorPhysicsMaterial;
@@ -38,6 +38,7 @@ namespace AsylumHorror.World
 
         public void BuildLevel()
         {
+            Debug.LogWarning("RuntimeLevelBuilder is blockout-only. Use the authored HospitalLevel scene for the playable experience.");
             built = true;
             generatedRoot = new GameObject("GeneratedLevelRoot").transform;
             generatedRoot.SetParent(transform, false);

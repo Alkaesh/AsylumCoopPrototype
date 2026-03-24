@@ -9,21 +9,78 @@ namespace AsylumHorror.Core
 {
     public class RoundRandomizer : NetworkBehaviour
     {
-        [Header("Doors")]
-        [SerializeField] private float lockedDoorChance = 0.4f;
-        [SerializeField] private float openDoorChance = 0.2f;
+        private static readonly string[] HookPointNames = { "Hook_A", "Hook_B", "Hook_C", "Hook_D", "Hook_E" };
+
+        private sealed class RouteProfile
+        {
+            public RouteProfile(
+                RoundRouteKind routeKind,
+                string[] generatorPointNames,
+                string[] keycardPointNames,
+                string[] powerPointNames,
+                string[] monsterPointNames,
+                string[] batteryPointNames)
+            {
+                RouteKind = routeKind;
+                GeneratorPointNames = generatorPointNames;
+                KeycardPointNames = keycardPointNames;
+                PowerPointNames = powerPointNames;
+                MonsterPointNames = monsterPointNames;
+                BatteryPointNames = batteryPointNames;
+            }
+
+            public RoundRouteKind RouteKind { get; }
+            public string[] GeneratorPointNames { get; }
+            public string[] KeycardPointNames { get; }
+            public string[] PowerPointNames { get; }
+            public string[] MonsterPointNames { get; }
+            public string[] BatteryPointNames { get; }
+        }
+
+        private static readonly RouteProfile[] RouteProfiles =
+        {
+            new RouteProfile(
+                RoundRouteKind.WestDescent,
+                new[] { "Generator_A", "Generator_C" },
+                new[] { "Keycard_A", "Keycard_C" },
+                new[] { "Power_A" },
+                new[] { "Monster_C", "Monster_D" },
+                new[] { "Battery_A", "Battery_C", "Battery_E", "Battery_G", "Battery_H" }),
+            new RouteProfile(
+                RoundRouteKind.EastDescent,
+                new[] { "Generator_B", "Generator_D" },
+                new[] { "Keycard_B", "Keycard_D" },
+                new[] { "Power_B" },
+                new[] { "Monster_B", "Monster_D" },
+                new[] { "Battery_B", "Battery_D", "Battery_F", "Battery_H", "Battery_C" }),
+            new RouteProfile(
+                RoundRouteKind.CrossCurrent,
+                new[] { "Generator_C", "Generator_D" },
+                new[] { "Keycard_E" },
+                new[] { "Power_C" },
+                new[] { "Monster_A", "Monster_C" },
+                new[] { "Battery_C", "Battery_D", "Battery_G", "Battery_H", "Battery_A" })
+        };
 
         [Server]
         public void ServerRandomizeLayout()
         {
             Dictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap = BuildSpawnMap();
-            RandomizeGenerators(spawnMap);
-            RandomizeKeycard(spawnMap);
-            RandomizePowerConsole(spawnMap);
-            RandomizeHooks(spawnMap);
-            RandomizeMonster(spawnMap);
-            RandomizeBatteries(spawnMap);
-            RandomizeDoors();
+            if (spawnMap.Count == 0)
+            {
+                return;
+            }
+
+            RouteProfile profile = RouteProfiles[Random.Range(0, RouteProfiles.Length)];
+            GameStateManager.Instance?.ServerSetActiveRoute(profile.RouteKind);
+
+            PositionGenerators(spawnMap, profile);
+            PositionKeycard(spawnMap, profile);
+            PositionPowerConsole(spawnMap, profile);
+            PositionHooks(spawnMap);
+            PositionMonster(spawnMap, profile);
+            PositionBatteries(spawnMap, profile);
+            ResetDoorsToAuthoredState();
         }
 
         [Server]
@@ -41,135 +98,245 @@ namespace AsylumHorror.Core
                 list.Add(point);
             }
 
-            foreach (List<ObjectiveSpawnPoint> points in map.Values)
-            {
-                Shuffle(points);
-            }
-
             return map;
         }
 
         [Server]
-        private void RandomizeGenerators(Dictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap)
+        private void PositionGenerators(Dictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap, RouteProfile profile)
         {
-            if (!spawnMap.TryGetValue(ObjectiveSpawnType.Generator, out List<ObjectiveSpawnPoint> points) || points.Count == 0)
+            GeneratorTask[] generators = FindObjectsByType<GeneratorTask>();
+            if (generators.Length == 0)
             {
                 return;
             }
 
-            GeneratorTask[] generators = FindObjectsByType<GeneratorTask>();
             for (int index = 0; index < generators.Length; index++)
             {
-                ObjectiveSpawnPoint spawnPoint = points[index % points.Count];
-                generators[index].transform.SetPositionAndRotation(spawnPoint.transform.position, spawnPoint.transform.rotation);
+                ObjectiveSpawnPoint spawnPoint = ResolveNamedPoint(
+                    spawnMap,
+                    ObjectiveSpawnType.Generator,
+                    profile.GeneratorPointNames,
+                    index);
+                if (spawnPoint == null)
+                {
+                    continue;
+                }
+
+                PlaceObjective(generators[index].transform, spawnPoint, ObjectiveSpawnType.Generator);
             }
         }
 
         [Server]
-        private void RandomizeKeycard(Dictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap)
+        private void PositionKeycard(Dictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap, RouteProfile profile)
         {
-            if (!spawnMap.TryGetValue(ObjectiveSpawnType.Keycard, out List<ObjectiveSpawnPoint> points) || points.Count == 0)
-            {
-                return;
-            }
-
             KeycardTask keycard = FindAnyObjectByType<KeycardTask>();
             if (keycard == null)
             {
                 return;
             }
 
-            ObjectiveSpawnPoint point = points[Random.Range(0, points.Count)];
-            keycard.transform.SetPositionAndRotation(point.transform.position, point.transform.rotation);
+            ObjectiveSpawnPoint point = ResolveRandomNamedPoint(spawnMap, ObjectiveSpawnType.Keycard, profile.KeycardPointNames);
+            if (point != null)
+            {
+                PlaceObjective(keycard.transform, point, ObjectiveSpawnType.Keycard);
+            }
         }
 
         [Server]
-        private void RandomizePowerConsole(Dictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap)
+        private void PositionPowerConsole(Dictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap, RouteProfile profile)
         {
-            if (!spawnMap.TryGetValue(ObjectiveSpawnType.PowerConsole, out List<ObjectiveSpawnPoint> points) || points.Count == 0)
-            {
-                return;
-            }
-
             PowerRestoreTask powerConsole = FindAnyObjectByType<PowerRestoreTask>();
             if (powerConsole == null)
             {
                 return;
             }
 
-            ObjectiveSpawnPoint point = points[Random.Range(0, points.Count)];
-            powerConsole.transform.SetPositionAndRotation(point.transform.position, point.transform.rotation);
+            ObjectiveSpawnPoint point = ResolveRandomNamedPoint(spawnMap, ObjectiveSpawnType.PowerConsole, profile.PowerPointNames);
+            if (point != null)
+            {
+                PlaceObjective(powerConsole.transform, point, ObjectiveSpawnType.PowerConsole);
+            }
         }
 
         [Server]
-        private void RandomizeHooks(Dictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap)
+        private void PositionHooks(Dictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap)
         {
-            if (!spawnMap.TryGetValue(ObjectiveSpawnType.Hook, out List<ObjectiveSpawnPoint> points) || points.Count == 0)
-            {
-                return;
-            }
-
             HookPoint[] hooks = FindObjectsByType<HookPoint>();
             for (int index = 0; index < hooks.Length; index++)
             {
-                ObjectiveSpawnPoint point = points[index % points.Count];
-                hooks[index].transform.SetPositionAndRotation(point.transform.position, point.transform.rotation);
+                ObjectiveSpawnPoint point = ResolveNamedPoint(spawnMap, ObjectiveSpawnType.Hook, HookPointNames, index);
+                if (point == null)
+                {
+                    continue;
+                }
+
+                PlaceObjective(hooks[index].transform, point, ObjectiveSpawnType.Hook);
             }
         }
 
         [Server]
-        private void RandomizeMonster(Dictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap)
+        private void PositionMonster(Dictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap, RouteProfile profile)
         {
-            if (!spawnMap.TryGetValue(ObjectiveSpawnType.Monster, out List<ObjectiveSpawnPoint> points) || points.Count == 0)
-            {
-                return;
-            }
-
             MonsterAI monster = FindAnyObjectByType<MonsterAI>();
             if (monster == null)
             {
                 return;
             }
 
-            ObjectiveSpawnPoint point = points[Random.Range(0, points.Count)];
-            monster.transform.SetPositionAndRotation(point.transform.position, point.transform.rotation);
+            ObjectiveSpawnPoint point = ResolveRandomNamedPoint(spawnMap, ObjectiveSpawnType.Monster, profile.MonsterPointNames);
+            if (point != null)
+            {
+                PlaceObjective(monster.transform, point, ObjectiveSpawnType.Monster);
+            }
         }
 
         [Server]
-        private void RandomizeBatteries(Dictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap)
+        private void PositionBatteries(Dictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap, RouteProfile profile)
         {
-            if (!spawnMap.TryGetValue(ObjectiveSpawnType.Battery, out List<ObjectiveSpawnPoint> points) || points.Count == 0)
+            BatteryPickupTask[] batteries = FindObjectsByType<BatteryPickupTask>();
+            if (batteries.Length == 0)
             {
                 return;
             }
 
-            BatteryPickupTask[] batteries = FindObjectsByType<BatteryPickupTask>();
             for (int index = 0; index < batteries.Length; index++)
             {
-                ObjectiveSpawnPoint point = points[index % points.Count];
-                batteries[index].transform.SetPositionAndRotation(point.transform.position, point.transform.rotation);
+                bool shouldBeActive = index < profile.BatteryPointNames.Length;
+                batteries[index].ServerSetSpawnEnabled(shouldBeActive);
+                if (!shouldBeActive)
+                {
+                    continue;
+                }
+
+                ObjectiveSpawnPoint point = ResolveNamedPoint(
+                    spawnMap,
+                    ObjectiveSpawnType.Battery,
+                    profile.BatteryPointNames,
+                    index);
+                if (point == null)
+                {
+                    continue;
+                }
+
+                PlaceObjective(batteries[index].transform, point, ObjectiveSpawnType.Battery);
             }
         }
 
         [Server]
-        private void RandomizeDoors()
+        private void ResetDoorsToAuthoredState()
         {
             NetworkDoor[] doors = FindObjectsByType<NetworkDoor>();
             foreach (NetworkDoor door in doors)
             {
-                bool locked = Random.value < lockedDoorChance;
-                bool opened = !locked && Random.value < openDoorChance;
-                door.ServerSetRandomState(opened, locked);
+                door.ServerResetToInitialState();
             }
         }
 
-        private static void Shuffle<T>(IList<T> list)
+        private static ObjectiveSpawnPoint ResolveNamedPoint(
+            IReadOnlyDictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap,
+            ObjectiveSpawnType type,
+            IReadOnlyList<string> preferredNames,
+            int orderedIndex)
         {
-            for (int i = 0; i < list.Count; i++)
+            if (preferredNames != null && preferredNames.Count > 0)
             {
-                int swapIndex = Random.Range(i, list.Count);
-                (list[i], list[swapIndex]) = (list[swapIndex], list[i]);
+                int clampedIndex = Mathf.Clamp(orderedIndex, 0, preferredNames.Count - 1);
+                ObjectiveSpawnPoint namedPoint = FindPointByName(spawnMap, type, preferredNames[clampedIndex]);
+                if (namedPoint != null)
+                {
+                    return namedPoint;
+                }
             }
+
+            if (spawnMap.TryGetValue(type, out List<ObjectiveSpawnPoint> fallbacks) && fallbacks.Count > 0)
+            {
+                return fallbacks[Mathf.Clamp(orderedIndex, 0, fallbacks.Count - 1)];
+            }
+
+            return null;
+        }
+
+        private static ObjectiveSpawnPoint ResolveRandomNamedPoint(
+            IReadOnlyDictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap,
+            ObjectiveSpawnType type,
+            IReadOnlyList<string> preferredNames)
+        {
+            if (preferredNames != null && preferredNames.Count > 0)
+            {
+                int startIndex = Random.Range(0, preferredNames.Count);
+                for (int offset = 0; offset < preferredNames.Count; offset++)
+                {
+                    string candidate = preferredNames[(startIndex + offset) % preferredNames.Count];
+                    ObjectiveSpawnPoint namedPoint = FindPointByName(spawnMap, type, candidate);
+                    if (namedPoint != null)
+                    {
+                        return namedPoint;
+                    }
+                }
+            }
+
+            if (spawnMap.TryGetValue(type, out List<ObjectiveSpawnPoint> fallbacks) && fallbacks.Count > 0)
+            {
+                return fallbacks[Random.Range(0, fallbacks.Count)];
+            }
+
+            return null;
+        }
+
+        private static ObjectiveSpawnPoint FindPointByName(
+            IReadOnlyDictionary<ObjectiveSpawnType, List<ObjectiveSpawnPoint>> spawnMap,
+            ObjectiveSpawnType type,
+            string pointName)
+        {
+            if (string.IsNullOrWhiteSpace(pointName) ||
+                !spawnMap.TryGetValue(type, out List<ObjectiveSpawnPoint> points))
+            {
+                return null;
+            }
+
+            foreach (ObjectiveSpawnPoint point in points)
+            {
+                if (point != null && point.name == pointName)
+                {
+                    return point;
+                }
+            }
+
+            return null;
+        }
+
+        [Server]
+        private static void PlaceObjective(Transform target, ObjectiveSpawnPoint spawnPoint, ObjectiveSpawnType spawnType)
+        {
+            if (target == null || spawnPoint == null)
+            {
+                return;
+            }
+
+            Vector3 clearance = ResolveClearance(spawnType);
+            bool requireNavMesh = spawnType == ObjectiveSpawnType.Monster;
+            if (!PlacementSafety.TryMoveTransformToSafePlacement(
+                    target,
+                    spawnPoint.transform.position,
+                    spawnPoint.transform.rotation,
+                    clearance,
+                    requireNavMesh))
+            {
+                target.SetPositionAndRotation(spawnPoint.transform.position, spawnPoint.transform.rotation);
+            }
+        }
+
+        private static Vector3 ResolveClearance(ObjectiveSpawnType spawnType)
+        {
+            return spawnType switch
+            {
+                ObjectiveSpawnType.Generator => new Vector3(1.3f, 1.25f, 1.05f),
+                ObjectiveSpawnType.PowerConsole => new Vector3(0.9f, 0.95f, 0.45f),
+                ObjectiveSpawnType.Hook => new Vector3(0.65f, 1.3f, 0.65f),
+                ObjectiveSpawnType.Monster => new Vector3(0.6f, 1.1f, 0.6f),
+                ObjectiveSpawnType.Battery => new Vector3(0.18f, 0.28f, 0.18f),
+                _ => new Vector3(0.2f, 0.22f, 0.2f)
+            };
         }
     }
 }

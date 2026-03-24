@@ -16,6 +16,7 @@ namespace AsylumHorror.Tasks
         [SerializeField] private AudioClip pickupClip;
 
         [SyncVar(hook = nameof(OnConsumedChanged))] private bool consumed;
+        [SyncVar(hook = nameof(OnSpawnEnabledChanged))] private bool spawnEnabled = true;
 
         private void Awake()
         {
@@ -27,7 +28,7 @@ namespace AsylumHorror.Tasks
 
         public override bool CanInteract(NetworkPlayerStatus player)
         {
-            if (!base.CanInteract(player) || consumed || player == null)
+            if (!base.CanInteract(player) || consumed || !spawnEnabled || player == null)
             {
                 return false;
             }
@@ -41,6 +42,11 @@ namespace AsylumHorror.Tasks
             if (consumed)
             {
                 return "Battery Used";
+            }
+
+            if (!spawnEnabled)
+            {
+                return string.Empty;
             }
 
             return "E: Insert Battery";
@@ -71,10 +77,16 @@ namespace AsylumHorror.Tasks
             consumed = false;
         }
 
+        [Server]
+        public void ServerSetSpawnEnabled(bool enabled)
+        {
+            spawnEnabled = enabled;
+        }
+
         public override void OnStartClient()
         {
             base.OnStartClient();
-            ApplyConsumedVisual(consumed);
+            ApplyVisualState(consumed, spawnEnabled);
         }
 
         [ClientRpc]
@@ -88,30 +100,37 @@ namespace AsylumHorror.Tasks
 
         private void OnConsumedChanged(bool _, bool nextValue)
         {
-            ApplyConsumedVisual(nextValue);
+            ApplyVisualState(nextValue, spawnEnabled);
         }
 
-        private void ApplyConsumedVisual(bool isConsumed)
+        private void OnSpawnEnabledChanged(bool _, bool nextValue)
         {
+            ApplyVisualState(consumed, nextValue);
+        }
+
+        private void ApplyVisualState(bool isConsumed, bool isSpawnEnabled)
+        {
+            bool visible = !isConsumed && isSpawnEnabled;
+
             if (visualRenderers != null && visualRenderers.Length > 0)
             {
                 foreach (Renderer renderer in visualRenderers)
                 {
                     if (renderer != null)
                     {
-                        renderer.enabled = !isConsumed;
+                        renderer.enabled = visible;
                     }
                 }
             }
 
             if (visualRenderer != null)
             {
-                visualRenderer.enabled = !isConsumed;
+                visualRenderer.enabled = visible;
             }
 
             if (pickupCollider != null)
             {
-                pickupCollider.enabled = !isConsumed;
+                pickupCollider.enabled = visible;
             }
         }
     }

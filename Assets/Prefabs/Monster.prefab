@@ -170,6 +170,7 @@ MonoBehaviour:
   searchSpeed: 3.3
   carrySpeed: 3.1
   patrolStoppingDistance: 0.9
+  patrolPauseRange: {x: 0.9, y: 2}
   investigateTimeout: 7
   suspiciousDuration: 3.2
   searchDuration: 8
@@ -202,6 +203,9 @@ MonoBehaviour:
   huntingSenseCooldown: 12
   huntingSenseRadius: 14
   crouchSenseRadius: 3
+  sensePulseNoiseWindow: 2.1
+  sensePulseCloseRadius: 4.9
+  sensePulseNoiseTrackingRadius: 5.5
   surgeCooldown: 18
   surgeDuration: 2.5
   surgeSpeedMultiplier: 1.24

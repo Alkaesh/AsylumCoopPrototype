@@ -28,7 +28,6 @@ namespace AsylumHorror.World
         [SerializeField] private bool triggerOnlyOnce = true;
 
         private bool fired;
-        private Material silhouetteMaterial;
 
         private void Awake()
         {
@@ -86,9 +85,11 @@ namespace AsylumHorror.World
         {
             Vector3 silhouettePosition = secondaryPoint != null ? secondaryPoint.position : transform.position;
             Quaternion silhouetteRotation = secondaryPoint != null ? secondaryPoint.rotation : transform.rotation;
-            GameObject silhouette = CreateSilhouette(silhouettePosition, silhouetteRotation);
+            GameObject silhouette = BossApparitionFactory.Create(silhouettePosition, silhouetteRotation, BossApparitionStyle.FlashReveal);
+            BossApparitionProxy proxy = silhouette != null ? silhouette.GetComponent<BossApparitionProxy>() : null;
+            proxy?.SetOpacity(0.78f);
             yield return PulseLight(0.9f, 2.2f);
-            yield return FadeSilhouette(silhouette, 0.9f);
+            yield return FadeApparition(silhouette, proxy, 0.9f);
         }
 
         private IEnumerator RevealCorpseMoment()
@@ -105,7 +106,13 @@ namespace AsylumHorror.World
         {
             Vector3 start = startPoint != null ? startPoint.position : transform.position;
             Quaternion startRotation = startPoint != null ? startPoint.rotation : transform.rotation;
-            GameObject silhouette = CreateSilhouette(start, startRotation);
+            GameObject silhouette = BossApparitionFactory.Create(start, startRotation, BossApparitionStyle.DoorwayShadow);
+            if (silhouette == null)
+            {
+                yield break;
+            }
+
+            BossApparitionProxy proxy = silhouette.GetComponent<BossApparitionProxy>();
             Vector3 end = secondaryPoint != null ? secondaryPoint.position : transform.position + transform.right * 2.2f;
             float duration = 0.7f;
             float endTime = Time.time + duration;
@@ -114,7 +121,7 @@ namespace AsylumHorror.World
             {
                 float t = 1f - Mathf.Clamp01((endTime - Time.time) / duration);
                 silhouette.transform.position = Vector3.Lerp(start, end, t);
-                SetSilhouetteAlpha(silhouette, Mathf.Lerp(0.65f, 0.05f, t));
+                proxy?.SetOpacity(Mathf.Lerp(0.65f, 0.05f, t));
                 yield return null;
             }
 
@@ -162,7 +169,7 @@ namespace AsylumHorror.World
             linkedLight.intensity = baseIntensity;
         }
 
-        private IEnumerator FadeSilhouette(GameObject silhouette, float duration)
+        private IEnumerator FadeApparition(GameObject silhouette, BossApparitionProxy proxy, float duration)
         {
             if (silhouette == null)
             {
@@ -173,65 +180,11 @@ namespace AsylumHorror.World
             while (Time.time < endTime)
             {
                 float t = 1f - Mathf.Clamp01((endTime - Time.time) / duration);
-                SetSilhouetteAlpha(silhouette, Mathf.Lerp(0.7f, 0f, t));
+                proxy?.SetOpacity(Mathf.Lerp(0.7f, 0f, t));
                 yield return null;
             }
 
             Destroy(silhouette);
-        }
-
-        private GameObject CreateSilhouette(Vector3 position, Quaternion rotation)
-        {
-            if (silhouetteMaterial == null)
-            {
-                Shader shader = Shader.Find("Unlit/Color") ?? Shader.Find("Sprites/Default") ?? Shader.Find("Standard");
-                silhouetteMaterial = new Material(shader);
-                silhouetteMaterial.color = new Color(0.02f, 0.02f, 0.025f, 0.72f);
-            }
-
-            GameObject root = new GameObject("ScriptedSilhouette");
-            root.transform.SetPositionAndRotation(position, rotation);
-
-            GameObject torso = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            torso.transform.SetParent(root.transform, false);
-            torso.transform.localPosition = new Vector3(0f, 1.12f, 0f);
-            torso.transform.localScale = new Vector3(0.7f, 1.12f, 0.7f);
-            Destroy(torso.GetComponent<Collider>());
-
-            GameObject head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            head.transform.SetParent(root.transform, false);
-            head.transform.localPosition = new Vector3(0f, 2.06f, 0.05f);
-            head.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
-            Destroy(head.GetComponent<Collider>());
-
-            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>())
-            {
-                renderer.sharedMaterial = silhouetteMaterial;
-                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                renderer.receiveShadows = false;
-            }
-
-            return root;
-        }
-
-        private void SetSilhouetteAlpha(GameObject silhouette, float alpha)
-        {
-            if (silhouette == null)
-            {
-                return;
-            }
-
-            foreach (Renderer renderer in silhouette.GetComponentsInChildren<Renderer>())
-            {
-                if (renderer == null || renderer.material == null)
-                {
-                    continue;
-                }
-
-                Color color = renderer.material.color;
-                color.a = alpha;
-                renderer.material.color = color;
-            }
         }
     }
 }

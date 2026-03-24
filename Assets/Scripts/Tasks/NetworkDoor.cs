@@ -86,12 +86,7 @@ namespace AsylumHorror.Tasks
         public override void OnStartServer()
         {
             base.OnStartServer();
-            isOpen = startOpen;
-            isLocked = startLocked;
-            isTransitioning = false;
-            transitionEndsAt = 0;
-            SnapVisual(isOpen);
-            ApplyCollisionState(isOpen);
+            ServerResetToInitialState();
         }
 
         public override void OnStartClient()
@@ -207,16 +202,22 @@ namespace AsylumHorror.Tasks
         }
 
         [Server]
+        public void ServerResetToInitialState()
+        {
+            isOpen = startOpen;
+            isLocked = startLocked;
+            isTransitioning = false;
+            transitionEndsAt = 0;
+            SnapVisual(isOpen);
+            ApplyCollisionState(isOpen);
+        }
+
+        [Server]
         public void ServerSetRandomState(bool opened, bool locked)
         {
             if (requiresPower || requiresKeycard)
             {
-                isOpen = false;
-                isLocked = true;
-                isTransitioning = false;
-                transitionEndsAt = 0;
-                SnapVisual(false);
-                ApplyCollisionState(false);
+                ServerResetToInitialState();
                 return;
             }
 

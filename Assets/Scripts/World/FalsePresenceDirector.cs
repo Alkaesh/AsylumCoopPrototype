@@ -4,6 +4,7 @@ using AsylumHorror.Core;
 using AsylumHorror.Monster;
 using AsylumHorror.Player;
 using UnityEngine;
+using Camera = UnityEngine.Camera;
 
 namespace AsylumHorror.World
 {
@@ -11,6 +12,9 @@ namespace AsylumHorror.World
     {
         [Header("Timing")]
         [SerializeField] private Vector2 eventIntervalRange = new Vector2(16f, 28f);
+        [SerializeField] private Vector2 openingIntervalRange = new Vector2(28f, 42f);
+        [SerializeField] private float openingQuietDuration = 55f;
+        [SerializeField] private float dangerRecoveryDuration = 10f;
         [SerializeField] private float minMonsterDistance = 18f;
         [SerializeField] private float minPlayerDistance = 5f;
         [SerializeField] private float maxPlayerDistance = 24f;
@@ -30,8 +34,9 @@ namespace AsylumHorror.World
         private NetworkPlayerController localPlayer;
         private MonsterAI monster;
         private float nextEventAt;
+        private float lastDangerAt = -999f;
         private FalsePresenceAnchor lastAnchor;
-        private Material silhouetteMaterial;
+        private Camera localCamera;
 
         private void Start()
         {
@@ -49,6 +54,10 @@ namespace AsylumHorror.World
             if (localPlayer == null || !localPlayer.isLocalPlayer)
             {
                 localPlayer = FindLocalPlayer();
+                if (localPlayer != null)
+                {
+                    localCamera = localPlayer.GetComponentInChildren<Camera>(true);
+                }
             }
 
             if (monster == null)
@@ -59,6 +68,13 @@ namespace AsylumHorror.World
             if (localPlayer == null || monster == null || Time.time < nextEventAt)
             {
                 return;
+            }
+
+            if (monster.CurrentState == MonsterState.Chase ||
+                monster.CurrentState == MonsterState.Attack ||
+                monster.CurrentState == MonsterState.Carry)
+            {
+                lastDangerAt = Time.time;
             }
 
             NetworkPlayerStatus status = localPlayer.GetComponent<NetworkPlayerStatus>();
@@ -76,7 +92,13 @@ namespace AsylumHorror.World
 
             if (monster.CurrentState == MonsterState.Chase || monster.CurrentState == MonsterState.Attack)
             {
-                ScheduleNextEvent(0.5f);
+                ScheduleNextEvent(1.35f);
+                return;
+            }
+
+            if (Time.time - lastDangerAt < dangerRecoveryDuration)
+            {
+                ScheduleNextEvent(1.15f);
                 return;
             }
 
@@ -101,7 +123,7 @@ namespace AsylumHorror.World
         private void CacheAnchors()
         {
             anchors.Clear();
-            anchors.AddRange(FindObjectsByType<FalsePresenceAnchor>(FindObjectsSortMode.None));
+            anchors.AddRange(FindObjectsByType<FalsePresenceAnchor>());
         }
 
         private FalsePresenceAnchor PickAnchor()
@@ -111,6 +133,14 @@ namespace AsylumHorror.World
                 return null;
             }
 
+            GameStateManager gameState = GameStateManager.Instance;
+            RoundObjectivePhase phase = gameState != null
+                ? gameState.CurrentObjectivePhase
+                : RoundObjectivePhase.RestoreAuxiliaryPower;
+            RoundRouteKind routeKind = gameState != null
+                ? gameState.ActiveRouteKind
+                : RoundRouteKind.CrossCurrent;
+            float roundElapsed = gameState != null ? gameState.RoundElapsedSeconds : 0f;
             List<FalsePresenceAnchor> candidates = new List<FalsePresenceAnchor>();
             foreach (FalsePresenceAnchor anchor in anchors)
             {
@@ -130,6 +160,16 @@ namespace AsylumHorror.World
                     continue;
                 }
 
+                if (!IsAnchorEventAllowed(anchor.EventType, phase, roundElapsed))
+                {
+                    continue;
+                }
+
+                if (!HasPresentationLine(anchor))
+                {
+                    continue;
+                }
+
                 if (lastAnchor != null && anchor == lastAnchor && Random.value < 0.85f)
                 {
                     continue;
@@ -145,8 +185,8 @@ namespace AsylumHorror.World
 
             candidates.Sort((a, b) =>
             {
-                float scoreA = Mathf.Abs(Vector3.Distance(localPlayer.transform.position, a.transform.position) - a.PreferredPlayerDistance);
-                float scoreB = Mathf.Abs(Vector3.Distance(localPlayer.transform.position, b.transform.position) - b.PreferredPlayerDistance);
+                float scoreA = ScoreAnchor(a, routeKind, phase);
+                float scoreB = ScoreAnchor(b, routeKind, phase);
                 return scoreA.CompareTo(scoreB);
             });
 
@@ -185,20 +225,32 @@ namespace AsylumHorror.World
 
         private IEnumerator PlayFlashSilhouette(Transform anchor, float duration, Light linkedLight)
         {
-            GameObject silhouette = CreateSilhouette(anchor.position, anchor.rotation);
-            silhouette.SetActive(true);
+            GameObject silhouette = BossApparitionFactory.Create(anchor.position, anchor.rotation, BossApparitionStyle.FlashReveal);
+            if (silhouette == null)
+            {
+                yield return PulseLight(linkedLight, duration * 0.8f, flashIntensityMultiplier);
+                yield break;
+            }
+
+            BossApparitionProxy proxy = silhouette.GetComponent<BossApparitionProxy>();
+            proxy?.SetOpacity(0.74f);
             yield return StartCoroutine(PulseLight(linkedLight, duration * 0.8f, flashIntensityMultiplier));
-            yield return FadeAndDestroySilhouette(silhouette, duration);
+            yield return FadeAndDestroyApparition(silhouette, proxy, duration);
         }
 
         private IEnumerator PlayDoorwayShadow(Transform anchor, Transform target)
         {
-            GameObject silhouette = CreateSilhouette(anchor.position, anchor.rotation);
+            GameObject silhouette = BossApparitionFactory.Create(anchor.position, anchor.rotation, BossApparitionStyle.DoorwayShadow);
+            if (silhouette == null)
+            {
+                yield break;
+            }
+
+            BossApparitionProxy proxy = silhouette.GetComponent<BossApparitionProxy>();
             Vector3 start = anchor.position;
             Vector3 end = target != null ? target.position : anchor.position + anchor.right * 2f;
             Quaternion endRotation = target != null ? target.rotation : anchor.rotation;
             float endTime = Time.time + shadowCrossDuration;
-            Renderer[] renderers = silhouette.GetComponentsInChildren<Renderer>();
 
             while (Time.time < endTime)
             {
@@ -206,26 +258,25 @@ namespace AsylumHorror.World
                 silhouette.transform.SetPositionAndRotation(
                     Vector3.Lerp(start, end, t),
                     Quaternion.Slerp(anchor.rotation, endRotation, t));
-                SetSilhouetteAlpha(renderers, Mathf.Lerp(0.65f, 0.15f, t));
+                proxy?.SetOpacity(Mathf.Lerp(0.65f, 0.12f, t));
                 yield return null;
             }
 
             Object.Destroy(silhouette);
         }
 
-        private IEnumerator FadeAndDestroySilhouette(GameObject silhouette, float duration)
+        private IEnumerator FadeAndDestroyApparition(GameObject silhouette, BossApparitionProxy proxy, float duration)
         {
             if (silhouette == null)
             {
                 yield break;
             }
 
-            Renderer[] renderers = silhouette.GetComponentsInChildren<Renderer>();
             float endTime = Time.time + duration;
             while (Time.time < endTime)
             {
                 float t = 1f - Mathf.Clamp01((endTime - Time.time) / duration);
-                SetSilhouetteAlpha(renderers, Mathf.Lerp(0.72f, 0f, t));
+                proxy?.SetOpacity(Mathf.Lerp(0.72f, 0f, t));
                 yield return null;
             }
 
@@ -278,77 +329,172 @@ namespace AsylumHorror.World
             Destroy(audioObject, clip.length + 0.2f);
         }
 
-        private GameObject CreateSilhouette(Vector3 position, Quaternion rotation)
+        private bool HasPresentationLine(FalsePresenceAnchor anchor)
         {
-            if (silhouetteMaterial == null)
+            if (anchor == null || localPlayer == null || localCamera == null)
             {
-                Shader shader = Shader.Find("Unlit/Color") ?? Shader.Find("Sprites/Default") ?? Shader.Find("Standard");
-                silhouetteMaterial = new Material(shader);
-                silhouetteMaterial.color = new Color(0.02f, 0.02f, 0.025f, 0.72f);
+                return true;
             }
 
-            GameObject root = new GameObject("FalsePresenceSilhouette");
-            root.transform.SetPositionAndRotation(position, rotation);
-
-            GameObject torso = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            torso.name = "Torso";
-            torso.transform.SetParent(root.transform, false);
-            torso.transform.localPosition = new Vector3(0f, 1.15f, 0f);
-            torso.transform.localScale = new Vector3(0.72f, 1.15f, 0.72f);
-            Object.Destroy(torso.GetComponent<Collider>());
-
-            GameObject head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            head.name = "Head";
-            head.transform.SetParent(root.transform, false);
-            head.transform.localPosition = new Vector3(0f, 2.12f, 0.04f);
-            head.transform.localScale = new Vector3(0.42f, 0.42f, 0.42f);
-            Object.Destroy(head.GetComponent<Collider>());
-
-            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>())
+            if (anchor.EventType != FalsePresenceEventType.FlashSilhouette &&
+                anchor.EventType != FalsePresenceEventType.DoorwayShadow)
             {
-                renderer.sharedMaterial = silhouetteMaterial;
-                ShadowCastingModeOff(renderer);
+                return true;
             }
 
-            return root;
-        }
-
-        private void SetSilhouetteAlpha(Renderer[] renderers, float alpha)
-        {
-            if (renderers == null)
+            Vector3 cameraPosition = localCamera.transform.position;
+            Vector3 lookDirection = (anchor.transform.position - cameraPosition).normalized;
+            if (Vector3.Dot(localCamera.transform.forward, lookDirection) < -0.15f)
             {
-                return;
+                return false;
             }
 
-            foreach (Renderer renderer in renderers)
+            Vector3 targetPoint = anchor.transform.position + Vector3.up * 1.45f;
+            if (Physics.Linecast(cameraPosition, targetPoint, out RaycastHit hit, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
             {
-                if (renderer == null || renderer.material == null)
+                if (!hit.transform.IsChildOf(anchor.transform) &&
+                    !hit.transform.IsChildOf(localPlayer.transform))
                 {
-                    continue;
+                    return false;
                 }
-
-                Color color = renderer.material.color;
-                color.a = alpha;
-                renderer.material.color = color;
             }
-        }
 
-        private static void ShadowCastingModeOff(Renderer renderer)
-        {
-            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
+            return true;
         }
 
         private void ScheduleNextEvent(float multiplier = 1f)
         {
-            float min = Mathf.Min(eventIntervalRange.x, eventIntervalRange.y);
-            float max = Mathf.Max(eventIntervalRange.x, eventIntervalRange.y);
+            GameStateManager gameState = GameStateManager.Instance;
+            bool inQuietOpening = gameState == null || gameState.RoundElapsedSeconds < openingQuietDuration;
+            Vector2 intervalRange = inQuietOpening ? openingIntervalRange : eventIntervalRange;
+            float min = Mathf.Min(intervalRange.x, intervalRange.y);
+            float max = Mathf.Max(intervalRange.x, intervalRange.y);
+
+            if (gameState != null && gameState.CurrentObjectivePhase == RoundObjectivePhase.Escape)
+            {
+                min *= 0.82f;
+                max *= 0.82f;
+            }
+
             nextEventAt = Time.time + Random.Range(min, max) * Mathf.Max(0.15f, multiplier);
+        }
+
+        private float ScoreAnchor(FalsePresenceAnchor anchor, RoundRouteKind routeKind, RoundObjectivePhase phase)
+        {
+            float distanceScore = Mathf.Abs(
+                Vector3.Distance(localPlayer.transform.position, anchor.transform.position) -
+                anchor.PreferredPlayerDistance);
+            float score = distanceScore + Random.Range(0f, 0.6f);
+            score -= ResolveRouteAffinity(anchor.name, routeKind);
+            score -= ResolvePhaseAffinity(anchor.name, phase);
+            score += ResolveEventPenalty(anchor.EventType, phase);
+            return score;
+        }
+
+        private static bool IsAnchorEventAllowed(FalsePresenceEventType eventType, RoundObjectivePhase phase, float roundElapsed)
+        {
+            switch (phase)
+            {
+                case RoundObjectivePhase.RestoreAuxiliaryPower:
+                    if (roundElapsed < 80f)
+                    {
+                        return eventType == FalsePresenceEventType.DistantFootsteps ||
+                               eventType == FalsePresenceEventType.HideoutNoise;
+                    }
+
+                    return eventType != FalsePresenceEventType.FlashSilhouette;
+                case RoundObjectivePhase.FindAccessKey:
+                case RoundObjectivePhase.RestoreMainPower:
+                    return true;
+                case RoundObjectivePhase.Escape:
+                    return true;
+                default:
+                    return eventType != FalsePresenceEventType.FlashSilhouette;
+            }
+        }
+
+        private static float ResolveEventPenalty(FalsePresenceEventType eventType, RoundObjectivePhase phase)
+        {
+            return phase switch
+            {
+                RoundObjectivePhase.RestoreAuxiliaryPower when eventType == FalsePresenceEventType.FlashSilhouette => 2.4f,
+                RoundObjectivePhase.RestoreAuxiliaryPower when eventType == FalsePresenceEventType.DoorwayShadow => 0.9f,
+                RoundObjectivePhase.FindAccessKey when eventType == FalsePresenceEventType.DistantFootsteps => -0.2f,
+                RoundObjectivePhase.RestoreMainPower when eventType == FalsePresenceEventType.DoorwayShadow => -0.3f,
+                RoundObjectivePhase.Escape when eventType == FalsePresenceEventType.FlashSilhouette => -0.45f,
+                _ => 0f
+            };
+        }
+
+        private static float ResolveRouteAffinity(string anchorName, RoundRouteKind routeKind)
+        {
+            switch (routeKind)
+            {
+                case RoundRouteKind.WestDescent:
+                    if (ContainsAny(anchorName, "Security", "Archive", "Service"))
+                    {
+                        return 1.6f;
+                    }
+
+                    break;
+                case RoundRouteKind.EastDescent:
+                    if (ContainsAny(anchorName, "Security", "Operation", "Server"))
+                    {
+                        return 1.6f;
+                    }
+
+                    break;
+                case RoundRouteKind.CrossCurrent:
+                    if (ContainsAny(anchorName, "Security", "Cross", "Morgue"))
+                    {
+                        return 1.6f;
+                    }
+
+                    break;
+            }
+
+            return 0f;
+        }
+
+        private static float ResolvePhaseAffinity(string anchorName, RoundObjectivePhase phase)
+        {
+            switch (phase)
+            {
+                case RoundObjectivePhase.RestoreAuxiliaryPower:
+                    return ContainsAny(anchorName, "Security", "Archive", "Operation") ? 0.7f : 0f;
+                case RoundObjectivePhase.FindAccessKey:
+                    return ContainsAny(anchorName, "Archive", "Operation", "Cross") ? 0.55f : 0f;
+                case RoundObjectivePhase.RestoreMainPower:
+                    return ContainsAny(anchorName, "Service", "Server", "Cross") ? 0.85f : 0f;
+                case RoundObjectivePhase.Escape:
+                    return ContainsAny(anchorName, "Cross", "Morgue", "Security") ? 0.9f : 0f;
+                default:
+                    return 0f;
+            }
+        }
+
+        private static bool ContainsAny(string value, params string[] tokens)
+        {
+            if (string.IsNullOrWhiteSpace(value) || tokens == null)
+            {
+                return false;
+            }
+
+            foreach (string token in tokens)
+            {
+                if (!string.IsNullOrWhiteSpace(token) &&
+                    value.IndexOf(token, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static NetworkPlayerController FindLocalPlayer()
         {
-            foreach (NetworkPlayerController controller in FindObjectsByType<NetworkPlayerController>(FindObjectsSortMode.None))
+            foreach (NetworkPlayerController controller in FindObjectsByType<NetworkPlayerController>())
             {
                 if (controller != null && controller.isLocalPlayer)
                 {

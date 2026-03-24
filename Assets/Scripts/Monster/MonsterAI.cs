@@ -42,6 +42,7 @@ namespace AsylumHorror.Monster
         [SerializeField] private float searchSpeed = 3.3f;
         [SerializeField] private float carrySpeed = 3.1f;
         [SerializeField] private float patrolStoppingDistance = 0.9f;
+        [SerializeField] private Vector2 patrolPauseRange = new Vector2(0.9f, 2f);
 
         [Header("State Timers")]
         [SerializeField] private float investigateTimeout = 7f;
@@ -84,6 +85,9 @@ namespace AsylumHorror.Monster
         [SerializeField] private float huntingSenseCooldown = 12f;
         [SerializeField] private float huntingSenseRadius = 14f;
         [SerializeField] private float crouchSenseRadius = 3f;
+        [SerializeField] private float sensePulseNoiseWindow = 2.1f;
+        [SerializeField] private float sensePulseCloseRadius = 4.9f;
+        [SerializeField] private float sensePulseNoiseTrackingRadius = 5.5f;
         [SerializeField] private float surgeCooldown = 18f;
         [SerializeField] private float surgeDuration = 2.5f;
         [SerializeField] private float surgeSpeedMultiplier = 1.24f;
@@ -290,6 +294,30 @@ namespace AsylumHorror.Monster
             bool reached = navMeshAgent != null &&
                            navMeshAgent.hasPath &&
                            navMeshAgent.remainingDistance <= patrolStoppingDistance;
+            if (reached && stateEndsAt <= 0d)
+            {
+                float minPause = Mathf.Min(patrolPauseRange.x, patrolPauseRange.y);
+                float maxPause = Mathf.Max(patrolPauseRange.x, patrolPauseRange.y);
+                stateEndsAt = NetworkTime.time + UnityEngine.Random.Range(minPause, maxPause);
+            }
+
+            if (reached && NetworkTime.time < stateEndsAt)
+            {
+                ConfigureAgent(patrolSpeed * 0.8f, true);
+                if (navMeshAgent != null && navMeshAgent.hasPath)
+                {
+                    navMeshAgent.ResetPath();
+                }
+
+                SweepIdleLook();
+                return;
+            }
+
+            if (reached)
+            {
+                stateEndsAt = 0d;
+            }
+
             bool stalled = IsMovementStalled(patrolStoppingDistance + 1.15f);
             bool timedRefresh = NetworkTime.time >= nextPathRefreshAt;
             bool needsNextPoint = invalidPath || reached || stalled || timedRefresh;
@@ -798,6 +826,11 @@ namespace AsylumHorror.Monster
             {
                 nextSurgeAt = Math.Max(nextSurgeAt, NetworkTime.time + 1.1f);
             }
+
+            if (nextState == MonsterState.Patrol)
+            {
+                stateEndsAt = 0d;
+            }
         }
 
         private Vector3 ResolveDoorFocusPoint()
@@ -1070,7 +1103,7 @@ namespace AsylumHorror.Monster
 
             float visibilityMultiplier = ResolveVisibilityMultiplier(player);
             bool inCloseSightRange = distance <= closeSightDistance;
-            float effectiveViewDistance = Mathf.Max(closeSightDistance + 0.8f, viewDistance * visibilityMultiplier);
+            float effectiveViewDistance = Mathf.Max(closeSightDistance + 0.8f, viewDistance * visibilityMultiplier - 1.15f);
             if (!inCloseSightRange && distance > effectiveViewDistance)
             {
                 return false;
@@ -1085,7 +1118,7 @@ namespace AsylumHorror.Monster
 
             float effectiveViewAngle = inCloseSightRange
                 ? Mathf.Max(closeSightAngle, 164f)
-                : Mathf.Clamp(viewAngle + (visibilityMultiplier - 1f) * 16f, 64f, 98f);
+                : Mathf.Clamp(viewAngle + (visibilityMultiplier - 1f) * 14f, 60f, 94f);
             float angle = Vector3.Angle(flatForward, flatDirection);
             if (angle > effectiveViewAngle * 0.5f)
             {
@@ -1656,8 +1689,9 @@ namespace AsylumHorror.Monster
                 return;
             }
 
+            bool hasRecentNoise = TryGetRecentNoise(sensePulseNoiseWindow, out NoiseEvent recentNoise);
             NetworkPlayerStatus sensedTarget = null;
-            float bestDistance = float.MaxValue;
+            float bestScore = float.MaxValue;
 
             foreach (NetworkPlayerStatus player in FindObjectsByType<NetworkPlayerStatus>())
             {
@@ -1680,9 +1714,21 @@ namespace AsylumHorror.Monster
                     continue;
                 }
 
-                if (distance < bestDistance)
+                bool withinCloseSense = distance <= sensePulseCloseRadius;
+                bool corroboratedByNoise = hasRecentNoise &&
+                                           Vector3.Distance(player.transform.position, recentNoise.Position) <=
+                                           Mathf.Max(sensePulseNoiseTrackingRadius, recentNoise.Radius * 0.35f);
+                if (!withinCloseSense && !corroboratedByNoise)
                 {
-                    bestDistance = distance;
+                    continue;
+                }
+
+                float score = withinCloseSense
+                    ? distance
+                    : Vector3.Distance(player.transform.position, recentNoise.Position) + distance * 0.28f;
+                if (score < bestScore)
+                {
+                    bestScore = score;
                     sensedTarget = player;
                 }
             }
@@ -1690,17 +1736,39 @@ namespace AsylumHorror.Monster
             nextSensePulseAt = NetworkTime.time + huntingSenseCooldown * UnityEngine.Random.Range(0.88f, 1.18f);
             if (sensedTarget == null)
             {
+                if (hasRecentNoise && recentNoise.Priority >= 1.35f)
+                {
+                    lastKnownTargetPosition = recentNoise.Position;
+                    BeginInvestigate(recentNoise.Position);
+                }
+
                 return;
             }
 
-            Vector3 probePoint = sensedTarget.transform.position;
+            float targetDistance = Vector3.Distance(transform.position, sensedTarget.transform.position);
+            bool useNoiseLead = hasRecentNoise && targetDistance > sensePulseCloseRadius;
+            Vector3 probePoint = useNoiseLead ? recentNoise.Position : sensedTarget.transform.position;
             if (sensedTarget.TryGetComponent(out CharacterController characterController))
             {
-                probePoint += characterController.velocity * 0.18f;
+                probePoint += characterController.velocity * (useNoiseLead ? 0.08f : 0.14f);
             }
 
             lastKnownTargetPosition = probePoint;
             BeginInvestigate(probePoint);
+        }
+
+        [Server]
+        private bool TryGetRecentNoise(float maxAgeSeconds, out NoiseEvent noiseEvent)
+        {
+            if (bufferedNoise.HasValue &&
+                NetworkTime.time - bufferedNoise.Value.Timestamp <= maxAgeSeconds)
+            {
+                noiseEvent = bufferedNoise.Value;
+                return true;
+            }
+
+            noiseEvent = default;
+            return false;
         }
 
         [Server]

@@ -135,10 +135,7 @@ namespace AsylumHorror.UI
 
             if (statusText != null)
             {
-                string traumaTag = localStatus.HasRescueTrauma ? " | Shocked" : string.Empty;
-                string focusTag = localStatus.FocusAbilityActive ? " | Focused" : string.Empty;
-                string hiddenTag = localStatus.IsHidden ? " | Hidden" : string.Empty;
-                statusText.text = $"State: {localStatus.Condition}{traumaTag}{focusTag}{hiddenTag}";
+                statusText.text = BuildLocalStatusText();
             }
 
             if (hookTimerSlider != null)
@@ -161,25 +158,13 @@ namespace AsylumHorror.UI
                 }
             }
 
-            if (abilityText != null)
-            {
-                if (localStatus.Condition == PlayerCondition.Hooked)
-                {
-                    abilityText.text = localStatus.HookSelfEscapeAvailable
-                        ? "F: Tempt Fate"
-                        : "Fate chance spent";
-                }
-                else
-                {
-                    float cooldown = localStatus.FocusAbilityCooldownRemaining;
-                    abilityText.text = cooldown <= 0.01f
-                        ? "Q: Steady Hands ready"
-                        : $"Q: Steady Hands {cooldown:0}s";
-                }
-            }
-
             float stress01 = localStress != null ? localStress.CurrentStress01 : 0f;
             float reveal01 = localStress != null ? localStress.RevealFlash01 : 0f;
+
+            if (abilityText != null)
+            {
+                abilityText.text = BuildAbilityText(stress01);
+            }
             ApplyStressVisuals(stress01, reveal01);
         }
 
@@ -251,8 +236,8 @@ namespace AsylumHorror.UI
                     break;
                 default:
                     hookWheelText.text = status.HookSelfEscapeAvailable
-                        ? "F: SPIN FOR 25% ESCAPE"
-                        : "NO MORE LUCK THIS HOOK";
+                        ? "F: TEMPT FATE"
+                        : "FATE IS SPENT";
                     break;
             }
         }
@@ -293,7 +278,7 @@ namespace AsylumHorror.UI
             foreach (NetworkPlayerStatus player in players)
             {
                 string marker = player == localStatus ? "You" : $"P{index}";
-                builder.Append(marker).Append(": ").Append(player.Condition).Append('\n');
+                builder.Append(marker).Append(": ").Append(BuildTeammateStateText(player)).Append('\n');
                 index++;
             }
 
@@ -336,6 +321,88 @@ namespace AsylumHorror.UI
             }
 
             return builder.ToString().TrimEnd();
+        }
+
+        private string BuildLocalStatusText()
+        {
+            if (localStatus == null)
+            {
+                return string.Empty;
+            }
+
+            if (localStatus.IsHidden)
+            {
+                return "Status: Holding breath";
+            }
+
+            return localStatus.Condition switch
+            {
+                PlayerCondition.Healthy when localStatus.FocusAbilityActive => "Status: Hands steady",
+                PlayerCondition.Healthy => "Status: Stable",
+                PlayerCondition.Injured when localStatus.HasRescueTrauma => "Status: Wounded and shaking",
+                PlayerCondition.Injured => "Status: Wounded",
+                PlayerCondition.Knocked => "Status: Down",
+                PlayerCondition.Carried => "Status: Taken",
+                PlayerCondition.Hooked => "Status: On the hook",
+                PlayerCondition.Dead => "Status: Lost",
+                PlayerCondition.Escaped => "Status: Out",
+                _ => "Status: Strained"
+            };
+        }
+
+        private string BuildAbilityText(float stress01)
+        {
+            if (localStatus == null)
+            {
+                return string.Empty;
+            }
+
+            if (localStatus.Condition == PlayerCondition.Hooked)
+            {
+                return localStatus.HookSelfEscapeAvailable
+                    ? "F: Tempt fate"
+                    : "Fate spent";
+            }
+
+            if (!localStatus.CanControlCharacter)
+            {
+                return string.Empty;
+            }
+
+            float cooldown = localStatus.FocusAbilityCooldownRemaining;
+            bool pressureWindow = stress01 > 0.25f || localStatus.HasRescueTrauma;
+
+            if (localStatus.FocusAbilityActive)
+            {
+                return "Q: Steady hands";
+            }
+
+            if (cooldown <= 0.01f)
+            {
+                return pressureWindow ? "Q: Steady yourself" : string.Empty;
+            }
+
+            return pressureWindow ? "Steady hands recovering" : string.Empty;
+        }
+
+        private static string BuildTeammateStateText(NetworkPlayerStatus player)
+        {
+            if (player == null)
+            {
+                return "Lost";
+            }
+
+            return player.Condition switch
+            {
+                PlayerCondition.Healthy => "Active",
+                PlayerCondition.Injured => "Wounded",
+                PlayerCondition.Knocked => "Down",
+                PlayerCondition.Carried => "Taken",
+                PlayerCondition.Hooked => "Hooked",
+                PlayerCondition.Dead => "Lost",
+                PlayerCondition.Escaped => "Out",
+                _ => "Unknown"
+            };
         }
     }
 }

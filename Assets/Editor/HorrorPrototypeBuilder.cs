@@ -1873,6 +1873,7 @@ namespace AsylumHorror.EditorTools
             PlaceHorrorDetails(root);
             PlaceEnvironmentalDebris(root);
             PlaceHospitalSetDressing(root);
+            PlaceModularShellDressings(root);
         }
 
         private static void BuildRoom(Transform parent, string roomName, Vector3 center, float width, float length, RoomDoorSide doorSide, float doorwayWidth)
@@ -2133,6 +2134,43 @@ namespace AsylumHorror.EditorTools
             PlaceAssetProp(root, KenneyTrashcanAssetPath, "HallTrash_West", new Vector3(-19.6f, 0f, -6.4f), Quaternion.identity, 0.85f, "metal");
             PlaceAssetProp(root, KenneyTrashcanAssetPath, "HallTrash_East", new Vector3(19.6f, 0f, 6.4f), Quaternion.identity, 0.85f, "metal");
             CreateCube(root, "HallReceptionBarrier", new Vector3(0f, 1.1f, 13.8f), new Vector3(6.2f, 2.2f, 0.2f), new Color(0.18f, 0.18f, 0.2f), "glass");
+        }
+
+        private static void PlaceModularShellDressings(Transform root)
+        {
+            PlaceRawAssetProp(root, QuaterniusWall5AssetPath, "SecurityPanel_NorthWest", new Vector3(-17.8f, 0f, 48.4f), Quaternion.identity, 3.15f);
+            PlaceRawAssetProp(root, QuaterniusWall5AssetPath, "SecurityPanel_NorthEast", new Vector3(17.8f, 0f, 48.4f), Quaternion.identity, 3.15f);
+            PlaceRawAssetProp(root, QuaterniusColumn2AssetPath, "SecurityColumn_West", new Vector3(-12.4f, 0f, 34.8f), Quaternion.identity, 3.05f);
+            PlaceRawAssetProp(root, QuaterniusColumn2AssetPath, "SecurityColumn_East", new Vector3(12.4f, 0f, 34.8f), Quaternion.identity, 3.05f);
+
+            PlaceRawAssetProp(root, QuaterniusWall2AssetPath, "ArchivePanel_A", new Vector3(-42.2f, 0f, 10.6f), Quaternion.Euler(0f, 90f, 0f), 3.05f);
+            PlaceRawAssetProp(root, QuaterniusWall2AssetPath, "ArchivePanel_B", new Vector3(-42.2f, 0f, -4.6f), Quaternion.Euler(0f, 90f, 0f), 3.05f);
+            PlaceRawAssetProp(root, QuaterniusColumn2AssetPath, "ArchiveColumn_A", new Vector3(-26.9f, 0f, 15.1f), Quaternion.identity, 3f);
+            PlaceRawAssetProp(root, QuaterniusPipesLongAssetPath, "ArchivePipe_A", new Vector3(-33.8f, 2.95f, 15.2f), Quaternion.Euler(0f, 90f, 0f), 0.58f);
+
+            PlaceRawAssetProp(root, QuaterniusWall5AssetPath, "LabPanel_A", new Vector3(42.4f, 0f, 11.2f), Quaternion.Euler(0f, -90f, 0f), 3.15f);
+            PlaceRawAssetProp(root, QuaterniusWall2AssetPath, "LabPanel_B", new Vector3(42.4f, 0f, -7.8f), Quaternion.Euler(0f, -90f, 0f), 3.15f);
+            PlaceRawAssetProp(root, QuaterniusColumn2AssetPath, "LabColumn_A", new Vector3(26.8f, 0f, 13.6f), Quaternion.identity, 3.05f);
+            PlaceRawAssetProp(root, QuaterniusComputerAssetPath, "LabConsole_A", new Vector3(28.6f, 0f, 12.1f), Quaternion.Euler(0f, 90f, 0f), 1.04f);
+
+            PlaceRawAssetProp(root, QuaterniusWall2AssetPath, "ServicePanel_A", new Vector3(-42.1f, 0f, -34.8f), Quaternion.Euler(0f, 90f, 0f), 3.15f);
+            PlaceRawAssetProp(root, QuaterniusWall5AssetPath, "ServicePanel_B", new Vector3(-42.1f, 0f, -21.4f), Quaternion.Euler(0f, 90f, 0f), 3.15f);
+            PlaceRawAssetProp(root, QuaterniusColumn2AssetPath, "ServiceColumn_A", new Vector3(-21.6f, 0f, -35.4f), Quaternion.identity, 3.1f);
+            PlaceRawAssetProp(root, QuaterniusCrateLongAssetPath, "ServiceCrate_A", new Vector3(-21.4f, 0f, -17.8f), Quaternion.Euler(0f, 90f, 0f), 1.32f);
+
+            PlaceRawAssetProp(root, QuaterniusWall5AssetPath, "MaintPanel_A", new Vector3(21.6f, 0f, -35.8f), Quaternion.Euler(0f, 180f, 0f), 3.15f);
+            PlaceRawAssetProp(root, QuaterniusWall2AssetPath, "MaintPanel_B", new Vector3(42.1f, 0f, -20.8f), Quaternion.Euler(0f, -90f, 0f), 3.15f);
+            PlaceRawAssetProp(root, QuaterniusColumn2AssetPath, "MaintColumn_A", new Vector3(21.5f, 0f, -18.9f), Quaternion.identity, 3.05f);
+            PlaceRawAssetProp(root, QuaterniusPipesLongAssetPath, "MaintPipe_A", new Vector3(32.2f, 2.92f, -35.1f), Quaternion.identity, 0.6f);
+
+            PlaceRawAssetProp(root, QuaterniusWall5AssetPath, "MorguePanel_A", new Vector3(-8.6f, 0f, -47.1f), Quaternion.identity, 3.05f);
+            PlaceRawAssetProp(root, QuaterniusWall5AssetPath, "MorguePanel_B", new Vector3(8.6f, 0f, -47.1f), Quaternion.identity, 3.05f);
+            PlaceRawAssetProp(root, QuaterniusColumn2AssetPath, "MorgueColumn_A", new Vector3(-9.2f, 0f, -36.4f), Quaternion.identity, 3f);
+            PlaceRawAssetProp(root, QuaterniusColumn2AssetPath, "MorgueColumn_B", new Vector3(9.2f, 0f, -36.4f), Quaternion.identity, 3f);
+
+            PlaceRawAssetProp(root, QuaterniusDoorSingleAssetPath, "HubDoorDress_A", new Vector3(-18.1f, 0f, 0f), Quaternion.Euler(0f, 90f, 0f), 3.05f);
+            PlaceRawAssetProp(root, QuaterniusDoorSingleAssetPath, "HubDoorDress_B", new Vector3(18.1f, 0f, 0f), Quaternion.Euler(0f, -90f, 0f), 3.05f);
+            PlaceRawAssetProp(root, QuaterniusDoorSingleAssetPath, "ServiceDoorDress", new Vector3(0f, 0f, -18.3f), Quaternion.identity, 3.05f);
         }
 
         private static void CreateHospitalLights(Transform root)
@@ -3041,7 +3079,7 @@ namespace AsylumHorror.EditorTools
             float targetHeight,
             string style)
         {
-            Material material = CreateMaterial(new Color(0.18f, 0.18f, 0.2f), style);
+            Material material = CreateMaterial(ResolveVariantTint(instanceName, new Color(0.18f, 0.18f, 0.2f), style), style);
             GameObject prop = InstantiateStyledModel(parent, assetPath, instanceName, localPosition, localRotation, targetHeight, material, true, true);
             if (prop == null)
             {
@@ -3057,6 +3095,11 @@ namespace AsylumHorror.EditorTools
             if (style == "blood")
             {
                 return;
+            }
+
+            if (ShouldValidatePropPlacement(localPosition, targetHeight))
+            {
+                FinalizeDecorPlacement(prop);
             }
         }
 
@@ -3092,7 +3135,7 @@ namespace AsylumHorror.EditorTools
             string style,
             Color tint)
         {
-            Material material = CreateTexturedMaterial(textureAssetPath, tint, style);
+            Material material = CreateTexturedMaterial(textureAssetPath, ResolveVariantTint(instanceName, tint, style), style);
             GameObject prop = InstantiateStyledModel(parent, assetPath, instanceName, localPosition, localRotation, targetHeight, material, true, true);
             if (prop == null)
             {
@@ -3104,6 +3147,82 @@ namespace AsylumHorror.EditorTools
             {
                 return;
             }
+
+            if (ShouldValidatePropPlacement(localPosition, targetHeight))
+            {
+                FinalizeDecorPlacement(prop);
+            }
+        }
+
+        private static bool ShouldValidatePropPlacement(Vector3 localPosition, float targetHeight)
+        {
+            return localPosition.y <= 0.08f && targetHeight >= 0.8f;
+        }
+
+        private static void FinalizeDecorPlacement(GameObject prop)
+        {
+            if (prop == null || !TryCalculateRendererBounds(prop, out Bounds bounds))
+            {
+                return;
+            }
+
+            Vector3 clearance = new Vector3(
+                Mathf.Max(0.12f, bounds.extents.x * 0.92f),
+                Mathf.Max(0.26f, bounds.extents.y * 0.94f),
+                Mathf.Max(0.12f, bounds.extents.z * 0.92f));
+
+            if (!PlacementSafety.TryResolvePlacement(
+                    prop.transform.position,
+                    prop.transform.rotation,
+                    clearance,
+                    false,
+                    out Pose safePose,
+                    4.5f,
+                    10f,
+                    1.25f))
+            {
+                Object.DestroyImmediate(prop);
+                return;
+            }
+
+            prop.transform.SetPositionAndRotation(safePose.position, safePose.rotation);
+        }
+
+        private static bool TryCalculateRendererBounds(GameObject root, out Bounds bounds)
+        {
+            Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+            if (renderers == null || renderers.Length == 0)
+            {
+                bounds = default;
+                return false;
+            }
+
+            bounds = renderers[0].bounds;
+            for (int index = 1; index < renderers.Length; index++)
+            {
+                bounds.Encapsulate(renderers[index].bounds);
+            }
+
+            return true;
+        }
+
+        private static Color ResolveVariantTint(string instanceName, Color baseTint, string style)
+        {
+            if (string.Equals(style, "blood", StringComparison.OrdinalIgnoreCase))
+            {
+                return baseTint;
+            }
+
+            int hash = string.IsNullOrWhiteSpace(instanceName) ? 0 : Animator.StringToHash(instanceName);
+            float seedA = Mathf.Abs(Mathf.Sin(hash * 0.0137f));
+            float seedB = Mathf.Abs(Mathf.Sin(hash * 0.0291f + 1.37f));
+            float seedC = Mathf.Abs(Mathf.Sin(hash * 0.0517f + 2.41f));
+
+            Color.RGBToHSV(baseTint, out float hue, out float saturation, out float value);
+            hue = Mathf.Repeat(hue + Mathf.Lerp(-0.018f, 0.018f, seedA), 1f);
+            saturation = Mathf.Clamp01(saturation * Mathf.Lerp(0.92f, 1.08f, seedB));
+            value = Mathf.Clamp01(value * Mathf.Lerp(0.82f, 1.06f, seedC));
+            return Color.HSVToRGB(hue, saturation, value);
         }
 
         private static void ResetGeneratedCaches()
