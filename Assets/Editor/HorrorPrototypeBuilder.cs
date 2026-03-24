@@ -962,6 +962,10 @@ namespace AsylumHorror.EditorTools
             shell.transform.localScale = new Vector3(1.35f, 2.2f, 0.72f);
             shell.GetComponent<Renderer>().sharedMaterial = shellMaterial;
             Object.DestroyImmediate(shell.GetComponent<Collider>());
+            CreateBlockingVolume(root.transform, "ShellBackCollider", new Vector3(0f, 1.1f, -0.37f), new Vector3(1.22f, 2.08f, 0.08f));
+            CreateBlockingVolume(root.transform, "ShellLeftCollider", new Vector3(-0.64f, 1.1f, -0.04f), new Vector3(0.08f, 2.08f, 0.62f));
+            CreateBlockingVolume(root.transform, "ShellRightCollider", new Vector3(0.64f, 1.1f, -0.04f), new Vector3(0.08f, 2.08f, 0.62f));
+            CreateBlockingVolume(root.transform, "ShellTopCollider", new Vector3(0f, 2.16f, -0.04f), new Vector3(1.22f, 0.08f, 0.62f));
 
             GameObject leftDoor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             leftDoor.name = "LeftDoor";
@@ -1037,6 +1041,7 @@ namespace AsylumHorror.EditorTools
             basePallet.transform.localScale = new Vector3(1.5f, 0.16f, 1.4f);
             basePallet.GetComponent<Renderer>().sharedMaterial = crateMaterial;
             Object.DestroyImmediate(basePallet.GetComponent<Collider>());
+            CreateBlockingVolume(root.transform, "CrateFloorCollider", new Vector3(0f, 0.18f, 0f), new Vector3(1.46f, 0.16f, 1.36f));
 
             GameObject leftStack = GameObject.CreatePrimitive(PrimitiveType.Cube);
             leftStack.name = "LeftStack";
@@ -1045,6 +1050,7 @@ namespace AsylumHorror.EditorTools
             leftStack.transform.localScale = new Vector3(0.32f, 1.38f, 1.36f);
             leftStack.GetComponent<Renderer>().sharedMaterial = crateMaterial;
             Object.DestroyImmediate(leftStack.GetComponent<Collider>());
+            CreateBlockingVolume(root.transform, "CrateLeftCollider", new Vector3(-0.62f, 0.88f, -0.08f), new Vector3(0.3f, 1.34f, 1.3f));
 
             GameObject rightStack = GameObject.CreatePrimitive(PrimitiveType.Cube);
             rightStack.name = "RightStack";
@@ -1053,6 +1059,7 @@ namespace AsylumHorror.EditorTools
             rightStack.transform.localScale = new Vector3(0.32f, 1.38f, 1.36f);
             rightStack.GetComponent<Renderer>().sharedMaterial = crateMaterial;
             Object.DestroyImmediate(rightStack.GetComponent<Collider>());
+            CreateBlockingVolume(root.transform, "CrateRightCollider", new Vector3(0.62f, 0.88f, -0.08f), new Vector3(0.3f, 1.34f, 1.3f));
 
             GameObject rearStack = GameObject.CreatePrimitive(PrimitiveType.Cube);
             rearStack.name = "RearStack";
@@ -1061,6 +1068,7 @@ namespace AsylumHorror.EditorTools
             rearStack.transform.localScale = new Vector3(1.32f, 1.46f, 0.28f);
             rearStack.GetComponent<Renderer>().sharedMaterial = crateMaterial;
             Object.DestroyImmediate(rearStack.GetComponent<Collider>());
+            CreateBlockingVolume(root.transform, "CrateRearCollider", new Vector3(0f, 0.92f, -0.62f), new Vector3(1.28f, 1.42f, 0.26f));
 
             GameObject tarpRoof = GameObject.CreatePrimitive(PrimitiveType.Cube);
             tarpRoof.name = "TarpRoof";
@@ -1069,6 +1077,7 @@ namespace AsylumHorror.EditorTools
             tarpRoof.transform.localScale = new Vector3(1.4f, 0.1f, 1.32f);
             tarpRoof.GetComponent<Renderer>().sharedMaterial = tarpMaterial;
             Object.DestroyImmediate(tarpRoof.GetComponent<Collider>());
+            CreateBlockingVolume(root.transform, "CrateRoofCollider", new Vector3(0f, 1.58f, -0.08f), new Vector3(1.34f, 0.08f, 1.26f));
 
             GameObject bloodMark = GameObject.CreatePrimitive(PrimitiveType.Cube);
             bloodMark.name = "BloodMark";
@@ -1172,6 +1181,10 @@ namespace AsylumHorror.EditorTools
             gurney.transform.localScale = new Vector3(1.16f, 0.18f, 1.92f);
             gurney.GetComponent<Renderer>().sharedMaterial = poleMaterial;
             Object.DestroyImmediate(gurney.GetComponent<Collider>());
+            CreateBlockingVolume(root.transform, "CurtainGurneyCollider", new Vector3(0f, 0.36f, -0.18f), new Vector3(1.1f, 0.16f, 1.86f));
+            CreateBlockingVolume(root.transform, "CurtainBackCollider", new Vector3(0f, 1.2f, -0.84f), new Vector3(1.68f, 1.88f, 0.08f));
+            CreateBlockingVolume(root.transform, "CurtainLeftBlock", new Vector3(-0.78f, 1.05f, 0f), new Vector3(0.08f, 2.08f, 1.68f));
+            CreateBlockingVolume(root.transform, "CurtainRightBlock", new Vector3(0.78f, 1.05f, 0f), new Vector3(0.08f, 2.08f, 1.68f));
 
             Transform hidePoint = new GameObject("HidePoint").transform;
             hidePoint.SetParent(root.transform, false);
@@ -1721,6 +1734,7 @@ namespace AsylumHorror.EditorTools
             CreatePlayerSpawnPoints(mapRoot);
             CreatePatrolPoints(mapRoot);
             CreateObjectiveSpawnPoints(mapRoot);
+            CreatePlacementProtectionVolumes(mapRoot);
             PlaceGameplayObjects(assets, mapRoot);
             PurgeLegacyWorldText(mapRoot);
             CreateHudCanvas();
@@ -3032,6 +3046,46 @@ namespace AsylumHorror.EditorTools
             point.transform.localRotation = rotation;
             ObjectiveSpawnPoint spawnPoint = point.AddComponent<ObjectiveSpawnPoint>();
             spawnPoint.SetType(spawnType);
+        }
+
+        private static void CreatePlacementProtectionVolumes(Transform root)
+        {
+            Transform protectionRoot = new GameObject("PlacementProtectionVolumes").transform;
+            protectionRoot.SetParent(root, false);
+
+            CreatePlacementProtectionVolume(protectionRoot, "Protect_NorthExit", new Vector3(0f, 1.2f, 51.5f), new Vector3(8.4f, 3.2f, 8.2f), 0.35f);
+            CreatePlacementProtectionVolume(protectionRoot, "Protect_SecurityDoor", new Vector3(0f, 1.2f, 35f), new Vector3(7.8f, 3.2f, 5.2f), 0.3f);
+            CreatePlacementProtectionVolume(protectionRoot, "Protect_AdminWestDoor", new Vector3(-25f, 1.2f, 34f), new Vector3(5.2f, 3.2f, 7.2f), 0.3f);
+            CreatePlacementProtectionVolume(protectionRoot, "Protect_AdminEastDoor", new Vector3(25f, 1.2f, 34f), new Vector3(5.2f, 3.2f, 7.2f), 0.3f);
+            CreatePlacementProtectionVolume(protectionRoot, "Protect_ArchiveDoor", new Vector3(-25f, 1.2f, 4f), new Vector3(5.2f, 3.2f, 7.8f), 0.3f);
+            CreatePlacementProtectionVolume(protectionRoot, "Protect_LabDoor", new Vector3(25f, 1.2f, 4f), new Vector3(5.2f, 3.2f, 7.8f), 0.3f);
+            CreatePlacementProtectionVolume(protectionRoot, "Protect_ServiceDoor", new Vector3(-21f, 1.2f, -28f), new Vector3(5.4f, 3.2f, 8.2f), 0.32f);
+            CreatePlacementProtectionVolume(protectionRoot, "Protect_MaintenanceDoor", new Vector3(21f, 1.2f, -28f), new Vector3(5.4f, 3.2f, 8.2f), 0.32f);
+            CreatePlacementProtectionVolume(protectionRoot, "Protect_MorgueDoor", new Vector3(0f, 1.2f, -36f), new Vector3(7.2f, 3.2f, 5.2f), 0.3f);
+
+            CreatePlacementProtectionVolume(protectionRoot, "Protect_HubNorthLane", new Vector3(0f, 1.2f, 25.5f), new Vector3(12f, 3.2f, 9.5f), 0.28f);
+            CreatePlacementProtectionVolume(protectionRoot, "Protect_HubSouthLane", new Vector3(0f, 1.2f, -21.5f), new Vector3(12f, 3.2f, 9.5f), 0.28f);
+            CreatePlacementProtectionVolume(protectionRoot, "Protect_WestCrossLane", new Vector3(-22.5f, 1.2f, 0f), new Vector3(9.5f, 3.2f, 10.5f), 0.28f);
+            CreatePlacementProtectionVolume(protectionRoot, "Protect_EastCrossLane", new Vector3(22.5f, 1.2f, 0f), new Vector3(9.5f, 3.2f, 10.5f), 0.28f);
+        }
+
+        private static void CreatePlacementProtectionVolume(Transform parent, string name, Vector3 position, Vector3 size, float padding)
+        {
+            GameObject volumeObject = new GameObject(name);
+            volumeObject.transform.SetParent(parent, false);
+            volumeObject.transform.localPosition = position;
+            PlacementProtectionVolume volume = volumeObject.AddComponent<PlacementProtectionVolume>();
+            volume.SetSize(size);
+            volume.SetPadding(padding);
+        }
+
+        private static void CreateBlockingVolume(Transform parent, string name, Vector3 localPosition, Vector3 size)
+        {
+            GameObject blocker = new GameObject(name);
+            blocker.transform.SetParent(parent, false);
+            blocker.transform.localPosition = localPosition;
+            BoxCollider collider = blocker.AddComponent<BoxCollider>();
+            collider.size = size;
         }
 
         private static void CreatePlayerSpawn(Transform parent, string name, Vector3 position, Quaternion rotation, int index)

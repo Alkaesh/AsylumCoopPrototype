@@ -25,9 +25,13 @@ namespace AsylumHorror.Player
         [SerializeField] private float runSpeed = 6.2f;
         [SerializeField] private float crouchSpeed = 2.2f;
         [SerializeField] private float gravity = 20f;
+        [SerializeField] private float jumpHeight = 0.8f;
+        [SerializeField] private float jumpCooldown = 0.45f;
         [SerializeField] private float standingHeight = 1.8f;
         [SerializeField] private float crouchHeight = 1.2f;
         [SerializeField] private float crouchTransitionSpeed = 12f;
+        [SerializeField] private float landingJoltDistance = 0.06f;
+        [SerializeField] private float landingJoltRecovery = 8.5f;
 
         [Header("Stamina")]
         [SerializeField] private float maxStamina = 100f;
@@ -80,6 +84,9 @@ namespace AsylumHorror.Player
         private bool cursorUnlockedByUser;
         private bool lobbyLookHeld;
         private HorrorScreenFX horrorScreenFX;
+        private float nextJumpTime;
+        private float landingJolt;
+        private bool localJumpActive;
 
         public PlayerLocomotionState LocomotionState => locomotionState;
         public float Stamina01 => maxStamina <= 0f ? 0f : stamina / maxStamina;
@@ -290,14 +297,32 @@ namespace AsylumHorror.Player
             Vector3 moveDirection = (transform.right * moveInput.x + transform.forward * moveInput.y).normalized;
             Vector3 planarVelocity = moveDirection * (targetSpeed * localMoveMagnitude);
 
-            if (characterController.isGrounded && characterVelocity.y < 0f)
+            bool groundedBeforeMove = characterController.isGrounded;
+            if (groundedBeforeMove && characterVelocity.y < 0f)
             {
                 characterVelocity.y = -2f;
+            }
+
+            if (groundedBeforeMove &&
+                !isCrouchingLocal &&
+                Time.time >= nextJumpTime &&
+                Input.GetKeyDown(KeyCode.Space))
+            {
+                characterVelocity.y = Mathf.Sqrt(Mathf.Max(0.01f, 2f * gravity * jumpHeight));
+                nextJumpTime = Time.time + jumpCooldown;
+                localJumpActive = true;
             }
 
             characterVelocity.y -= gravity * Time.deltaTime;
             Vector3 motion = planarVelocity + Vector3.up * characterVelocity.y;
             characterController.Move(motion * Time.deltaTime);
+
+            bool groundedAfterMove = characterController.isGrounded;
+            if (localJumpActive && groundedAfterMove && characterVelocity.y <= 0.1f)
+            {
+                localJumpActive = false;
+                landingJolt = Mathf.Max(landingJolt, landingJoltDistance);
+            }
 
             float targetHeight = isCrouchingLocal ? crouchHeight : standingHeight;
             float nextHeight = Mathf.Lerp(characterController.height, targetHeight, Time.deltaTime * crouchTransitionSpeed);
@@ -678,9 +703,11 @@ namespace AsylumHorror.Player
                 return;
             }
 
+            landingJolt = Mathf.MoveTowards(landingJolt, 0f, Time.deltaTime * landingJoltRecovery);
+            Vector3 cameraOffset = new Vector3(0f, -landingJolt, 0f);
             playerCamera.transform.localPosition = Vector3.Lerp(
                 playerCamera.transform.localPosition,
-                Vector3.zero,
+                cameraOffset,
                 Time.deltaTime * lobbyCameraSmoothing);
             playerCamera.transform.localRotation = Quaternion.identity;
         }

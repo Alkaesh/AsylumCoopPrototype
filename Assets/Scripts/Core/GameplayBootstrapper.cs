@@ -111,7 +111,7 @@ namespace AsylumHorror.Core
 
             if (FindAnyObjectByType<ExitDoorTask>() == null && exitDoorPrefab != null)
             {
-                SpawnNetworkObject(exitDoorPrefab.gameObject, exitDoorPosition, Quaternion.identity, ObjectiveSpawnType.PowerConsole);
+                SpawnNetworkObject(exitDoorPrefab.gameObject, exitDoorPosition, Quaternion.identity, BuildDoorRules(true));
             }
         }
 
@@ -145,7 +145,7 @@ namespace AsylumHorror.Core
                 }
 
                 Vector3 position = doorPositions[Mathf.Min(i, doorPositions.Length - 1)];
-                SpawnNetworkObject(doorPrefab.gameObject, position, Quaternion.identity, ObjectiveSpawnType.PowerConsole);
+                SpawnNetworkObject(doorPrefab.gameObject, position, Quaternion.identity, BuildDoorRules(false));
             }
         }
 
@@ -169,33 +169,38 @@ namespace AsylumHorror.Core
         [Server]
         private static void SpawnNetworkObject(GameObject prefab, Vector3 position, Quaternion rotation, ObjectiveSpawnType spawnType)
         {
-            Pose spawnPose = ResolveSafePose(position, rotation, spawnType);
+            Pose spawnPose = ResolveSafePose(position, rotation, PlacementSafety.ResolveRules(spawnType));
             GameObject instance = Instantiate(prefab, spawnPose.position, spawnPose.rotation);
             NetworkServer.Spawn(instance);
         }
 
         [Server]
-        private static Pose ResolveSafePose(Vector3 desiredPosition, Quaternion desiredRotation, ObjectiveSpawnType spawnType)
+        private static void SpawnNetworkObject(GameObject prefab, Vector3 position, Quaternion rotation, PlacementRules rules)
         {
-            Vector3 clearance = spawnType switch
-            {
-                ObjectiveSpawnType.Generator => new Vector3(1.3f, 1.25f, 1.05f),
-                ObjectiveSpawnType.PowerConsole => new Vector3(0.95f, 1f, 0.7f),
-                ObjectiveSpawnType.Hook => new Vector3(0.65f, 1.3f, 0.65f),
-                ObjectiveSpawnType.Monster => new Vector3(0.6f, 1.1f, 0.6f),
-                ObjectiveSpawnType.Battery => new Vector3(0.18f, 0.28f, 0.18f),
-                _ => new Vector3(0.45f, 0.9f, 0.45f)
-            };
+            Pose spawnPose = ResolveSafePose(position, rotation, rules);
+            GameObject instance = Instantiate(prefab, spawnPose.position, spawnPose.rotation);
+            NetworkServer.Spawn(instance);
+        }
 
-            bool requireNavMesh = spawnType == ObjectiveSpawnType.Monster;
+        [Server]
+        private static Pose ResolveSafePose(Vector3 desiredPosition, Quaternion desiredRotation, PlacementRules rules)
+        {
             return PlacementSafety.TryResolvePlacement(
                 desiredPosition,
                 desiredRotation,
-                clearance,
-                requireNavMesh,
+                rules,
                 out Pose resolvedPose)
                 ? resolvedPose
                 : new Pose(desiredPosition, desiredRotation);
+        }
+
+        private static PlacementRules BuildDoorRules(bool isExitDoor)
+        {
+            return new PlacementRules(
+                isExitDoor ? new Vector3(2.6f, 1.7f, 0.95f) : new Vector3(2.45f, 1.65f, 0.95f),
+                PlacementCategory.Structural,
+                false,
+                protectedPadding: isExitDoor ? 0.45f : 0.35f);
         }
     }
 }

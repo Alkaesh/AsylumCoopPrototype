@@ -313,30 +313,15 @@ namespace AsylumHorror.Core
                 return;
             }
 
-            Vector3 clearance = ResolveClearance(spawnType);
-            bool requireNavMesh = spawnType == ObjectiveSpawnType.Monster;
+            PlacementRules rules = PlacementSafety.ResolveRules(spawnType);
             if (!PlacementSafety.TryMoveTransformToSafePlacement(
                     target,
                     spawnPoint.transform.position,
                     spawnPoint.transform.rotation,
-                    clearance,
-                    requireNavMesh))
+                    rules))
             {
                 target.SetPositionAndRotation(spawnPoint.transform.position, spawnPoint.transform.rotation);
             }
-        }
-
-        private static Vector3 ResolveClearance(ObjectiveSpawnType spawnType)
-        {
-            return spawnType switch
-            {
-                ObjectiveSpawnType.Generator => new Vector3(1.3f, 1.25f, 1.05f),
-                ObjectiveSpawnType.PowerConsole => new Vector3(0.9f, 0.95f, 0.45f),
-                ObjectiveSpawnType.Hook => new Vector3(0.65f, 1.3f, 0.65f),
-                ObjectiveSpawnType.Monster => new Vector3(0.6f, 1.1f, 0.6f),
-                ObjectiveSpawnType.Battery => new Vector3(0.18f, 0.28f, 0.18f),
-                _ => new Vector3(0.2f, 0.22f, 0.2f)
-            };
         }
     }
 }
