@@ -54,9 +54,14 @@ namespace AsylumHorror.Player
         [SyncVar] private bool hookSelfEscapeAvailable;
         [SyncVar] private double hookSelfEscapeResolveNetworkTime;
         [SyncVar(hook = nameof(OnHookSelfEscapeOutcomeChanged))] private HookSelfEscapeOutcome hookSelfEscapeOutcome;
+        private uint localGrabScareMonsterNetId;
+        private float localGrabScareStartTime;
+        private float localGrabScareEndTime;
+        private byte localGrabScareVariant;
 
         public event Action<PlayerCondition> ConditionChanged;
         public event Action<HookSelfEscapeOutcome> HookSelfEscapeOutcomeChanged;
+        public event Action GrabScared;
 
         public PlayerCondition Condition => condition;
         public float HookRemainingTime => hookRemainingTime;
@@ -80,6 +85,14 @@ namespace AsylumHorror.Player
         public HookSelfEscapeOutcome CurrentHookSelfEscapeOutcome => hookSelfEscapeOutcome;
         public float HookSelfEscapeResolveRemaining =>
             HookSelfEscapeRolling ? Mathf.Max(0f, (float)(hookSelfEscapeResolveNetworkTime - NetworkTime.time)) : 0f;
+        public bool LocalGrabScareActive => Time.unscaledTime < localGrabScareEndTime;
+        public float LocalGrabScare01 =>
+            localGrabScareEndTime <= localGrabScareStartTime
+                ? 0f
+                : Mathf.Clamp01((Time.unscaledTime - localGrabScareStartTime) /
+                                Mathf.Max(0.01f, localGrabScareEndTime - localGrabScareStartTime));
+        public uint LocalGrabScareMonsterNetId => localGrabScareMonsterNetId;
+        public int LocalGrabScareVariant => localGrabScareVariant;
 
         public bool CanUseInteraction =>
             hidden ||
@@ -271,6 +284,10 @@ namespace AsylumHorror.Player
             hookSelfEscapeAvailable = false;
             hookSelfEscapeResolveNetworkTime = 0;
             hookSelfEscapeOutcome = HookSelfEscapeOutcome.None;
+            localGrabScareMonsterNetId = 0;
+            localGrabScareStartTime = 0f;
+            localGrabScareEndTime = 0f;
+            localGrabScareVariant = 0;
         }
 
         [Server]
@@ -306,6 +323,17 @@ namespace AsylumHorror.Player
             hidden = false;
             condition = PlayerCondition.Carried;
             return true;
+        }
+
+        [Server]
+        public void ServerTriggerGrabScare(NetworkIdentity monsterIdentity, float durationSeconds, byte variant)
+        {
+            if (connectionToClient == null || monsterIdentity == null)
+            {
+                return;
+            }
+
+            TargetPlayGrabScare(connectionToClient, monsterIdentity.netId, Mathf.Max(0.18f, durationSeconds), variant);
         }
 
         [Server]
@@ -543,8 +571,25 @@ namespace AsylumHorror.Player
             transform.SetPositionAndRotation(worldPosition, worldRotation);
         }
 
+        [TargetRpc]
+        private void TargetPlayGrabScare(NetworkConnection _, uint monsterNetId, float durationSeconds, byte variant)
+        {
+            localGrabScareMonsterNetId = monsterNetId;
+            localGrabScareStartTime = Time.unscaledTime;
+            localGrabScareEndTime = localGrabScareStartTime + Mathf.Max(0.18f, durationSeconds);
+            localGrabScareVariant = variant;
+            GrabScared?.Invoke();
+        }
+
         private void OnConditionSyncChanged(PlayerCondition _, PlayerCondition nextCondition)
         {
+            if (nextCondition != PlayerCondition.Carried && nextCondition != PlayerCondition.Knocked)
+            {
+                localGrabScareMonsterNetId = 0;
+                localGrabScareStartTime = 0f;
+                localGrabScareEndTime = 0f;
+            }
+
             ConditionChanged?.Invoke(nextCondition);
         }
 

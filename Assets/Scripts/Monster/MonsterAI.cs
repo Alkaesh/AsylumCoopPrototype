@@ -68,6 +68,10 @@ namespace AsylumHorror.Monster
         [SerializeField] private float footstepIntervalPatrol = 0.7f;
         [SerializeField] private float footstepIntervalChase = 0.42f;
         [SerializeField] private float footstepIntervalCarry = 0.56f;
+        [SerializeField] private float localGrabScareDuration = 0.72f;
+        [SerializeField] private float sharedGrabPresentationDuration = 0.58f;
+        [SerializeField] private AudioClip grabImpactClip;
+        [SerializeField] private AudioClip grabSnarlClip;
 
         [Header("Carry")]
         [SerializeField] private float maxCarryDuration = 24f;
@@ -104,6 +108,9 @@ namespace AsylumHorror.Monster
         [SyncVar] private uint attackTargetNetId;
         [SyncVar] private double stateEndsAt;
         [SyncVar] private Vector3 interestPoint;
+        [SyncVar] private uint grabPresentationVictimNetId;
+        [SyncVar] private double grabPresentationEndsAt;
+        [SyncVar] private byte grabPresentationVariant;
 
         private PatrolPoint[] patrolPoints = Array.Empty<PatrolPoint>();
         private int patrolIndex;
@@ -140,6 +147,21 @@ namespace AsylumHorror.Monster
         private double probeHoldEndsAt;
 
         public MonsterState CurrentState => currentState;
+        public bool GrabPresentationActive => NetworkTime.time < grabPresentationEndsAt;
+        public float GrabPresentation01
+        {
+            get
+            {
+                if (!GrabPresentationActive || sharedGrabPresentationDuration <= 0.01f)
+                {
+                    return 0f;
+                }
+
+                double elapsed = sharedGrabPresentationDuration - (grabPresentationEndsAt - NetworkTime.time);
+                return Mathf.Clamp01((float)(elapsed / sharedGrabPresentationDuration));
+            }
+        }
+        public int GrabPresentationVariant => grabPresentationVariant;
 
         private void Awake()
         {
@@ -212,6 +234,9 @@ namespace AsylumHorror.Monster
             searchListenEndsAt = 0;
             probeAdvanceAt = 0;
             probeHoldEndsAt = 0;
+            grabPresentationVictimNetId = 0;
+            grabPresentationEndsAt = 0;
+            grabPresentationVariant = 0;
             memory.Reset(transform.position);
 
             if (roundStartPoint != null)
@@ -1525,6 +1550,7 @@ namespace AsylumHorror.Monster
                 return;
             }
 
+            BeginGrabPresentation(target);
             carriedTargetNetId = target.netId;
             chaseTargetNetId = 0;
             attackTargetNetId = 0;
@@ -1535,6 +1561,42 @@ namespace AsylumHorror.Monster
             carryLastPosition = transform.position;
             carryLastProgressAt = NetworkTime.time;
             SetState(MonsterState.Carry);
+        }
+
+        [Server]
+        private void BeginGrabPresentation(NetworkPlayerStatus target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            grabPresentationVictimNetId = target.netId;
+            grabPresentationVariant = (byte)UnityEngine.Random.Range(0, 3);
+            grabPresentationEndsAt = NetworkTime.time + sharedGrabPresentationDuration;
+            target.ServerTriggerGrabScare(netIdentity, localGrabScareDuration, grabPresentationVariant);
+            RpcPlayGrabImpact(grabPresentationVariant);
+        }
+
+        public Transform ResolveGrabPresentationVictimTransform()
+        {
+            uint victimNetId = grabPresentationVictimNetId;
+            if (victimNetId == 0)
+            {
+                return null;
+            }
+
+            if (isServer && NetworkServer.spawned.TryGetValue(victimNetId, out NetworkIdentity serverIdentity))
+            {
+                return serverIdentity != null ? serverIdentity.transform : null;
+            }
+
+            if (NetworkClient.active && NetworkClient.spawned.TryGetValue(victimNetId, out NetworkIdentity clientIdentity))
+            {
+                return clientIdentity != null ? clientIdentity.transform : null;
+            }
+
+            return null;
         }
 
         [Server]
@@ -2536,6 +2598,27 @@ namespace AsylumHorror.Monster
             }
         }
 
+        [ClientRpc]
+        private void RpcPlayGrabImpact(byte variant)
+        {
+            if (stepAudioSource == null)
+            {
+                return;
+            }
+
+            float pitch = 0.92f + variant * 0.03f;
+            stepAudioSource.pitch = pitch;
+            if (grabImpactClip != null)
+            {
+                stepAudioSource.PlayOneShot(grabImpactClip, 1.08f);
+            }
+
+            if (grabSnarlClip != null)
+            {
+                stepAudioSource.PlayOneShot(grabSnarlClip, 0.76f);
+            }
+        }
+
         private void EnsureFallbackAudioClips()
         {
             if (audioSource != null)
@@ -2564,6 +2647,16 @@ namespace AsylumHorror.Monster
                 stepAudioSource.minDistance = 10f;
                 stepAudioSource.maxDistance = 58f;
                 stepAudioSource.volume = 1.28f;
+            }
+
+            if (grabImpactClip == null)
+            {
+                grabImpactClip = ProceduralAudioFactory.GetGrabImpactClip();
+            }
+
+            if (grabSnarlClip == null)
+            {
+                grabSnarlClip = ProceduralAudioFactory.GetMonsterSnarlClip();
             }
         }
 

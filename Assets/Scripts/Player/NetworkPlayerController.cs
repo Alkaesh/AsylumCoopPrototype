@@ -1,6 +1,7 @@
 using AsylumHorror.Monster;
 using AsylumHorror.Network;
 using AsylumHorror.Core;
+using AsylumHorror.World;
 using Mirror;
 using System.Collections.Generic;
 using UnityEngine;
@@ -39,6 +40,15 @@ namespace AsylumHorror.Player
         [SerializeField] private float lookPitchMax = 80f;
         [SerializeField] private float incapacitatedYawLimit = 85f;
 
+        [Header("Grab Scare")]
+        [SerializeField] private float grabCameraDistance = 0.42f;
+        [SerializeField] private float grabCameraHeight = 1.58f;
+        [SerializeField] private float grabCameraSideOffset = 0.18f;
+        [SerializeField] private float grabCameraLift = 0.08f;
+        [SerializeField] private float grabFovDrop = 11f;
+        [SerializeField] private float grabShakeAmplitude = 0.075f;
+        [SerializeField] private float grabShakeFrequency = 34f;
+
         [Header("Lobby Preview")]
         [SerializeField] private float lobbyWalkSpeed = 3.2f;
         [SerializeField] private float lobbyRunSpeed = 4.6f;
@@ -69,6 +79,7 @@ namespace AsylumHorror.Player
         private float localMoveMagnitude;
         private bool cursorUnlockedByUser;
         private bool lobbyLookHeld;
+        private HorrorScreenFX horrorScreenFX;
 
         public PlayerLocomotionState LocomotionState => locomotionState;
         public float Stamina01 => maxStamina <= 0f ? 0f : stamina / maxStamina;
@@ -96,6 +107,11 @@ namespace AsylumHorror.Player
                 cameraRoot = playerCamera.transform.parent != null
                     ? playerCamera.transform.parent
                     : playerCamera.transform;
+            }
+
+            if (playerCamera != null)
+            {
+                horrorScreenFX = playerCamera.GetComponent<HorrorScreenFX>();
             }
 
             if ((firstPersonHiddenRenderers == null || firstPersonHiddenRenderers.Length == 0) && playerCamera != null)
@@ -141,6 +157,7 @@ namespace AsylumHorror.Player
             if (playerStatus != null)
             {
                 playerStatus.ConditionChanged += OnConditionChanged;
+                playerStatus.GrabScared += OnGrabScared;
             }
 
             SceneManager.activeSceneChanged += OnActiveSceneChanged;
@@ -152,6 +169,7 @@ namespace AsylumHorror.Player
             if (playerStatus != null)
             {
                 playerStatus.ConditionChanged -= OnConditionChanged;
+                playerStatus.GrabScared -= OnGrabScared;
             }
 
             SceneManager.activeSceneChanged -= OnActiveSceneChanged;
@@ -191,6 +209,12 @@ namespace AsylumHorror.Player
 
             ApplyRuntimeSettings();
             HandleAbilityInput();
+            if (playerStatus != null && playerStatus.LocalGrabScareActive)
+            {
+                UpdateCameraMode();
+                return;
+            }
+
             if (gameplayScene || (lobbyScene && lookLocked))
             {
                 HandleMouseLook();
@@ -465,6 +489,23 @@ namespace AsylumHorror.Player
             ApplyLocalVisualOwnership();
         }
 
+        private void OnGrabScared()
+        {
+            if (!isLocalPlayer)
+            {
+                return;
+            }
+
+            cursorUnlockedByUser = false;
+            currentYawOffset = 0f;
+            if (playerCamera != null && horrorScreenFX == null)
+            {
+                horrorScreenFX = playerCamera.GetComponent<HorrorScreenFX>();
+            }
+
+            horrorScreenFX?.TriggerShock(1f, 0.72f);
+        }
+
         private void OnActiveSceneChanged(Scene _, Scene __)
         {
             if (!isLocalPlayer)
@@ -631,11 +672,107 @@ namespace AsylumHorror.Player
                 return;
             }
 
+            if (playerStatus != null && playerStatus.LocalGrabScareActive)
+            {
+                UpdateGrabScareCamera();
+                return;
+            }
+
             playerCamera.transform.localPosition = Vector3.Lerp(
                 playerCamera.transform.localPosition,
                 Vector3.zero,
                 Time.deltaTime * lobbyCameraSmoothing);
             playerCamera.transform.localRotation = Quaternion.identity;
+        }
+
+        private void UpdateGrabScareCamera()
+        {
+            MonsterAI monster = ResolveGrabScareMonster();
+            if (monster == null)
+            {
+                playerCamera.transform.localPosition = Vector3.Lerp(
+                    playerCamera.transform.localPosition,
+                    Vector3.zero,
+                    Time.deltaTime * lobbyCameraSmoothing);
+                playerCamera.transform.localRotation = Quaternion.identity;
+                return;
+            }
+
+            float progress = playerStatus != null ? playerStatus.LocalGrabScare01 : 1f;
+            float compress = progress < 0.18f
+                ? Mathf.SmoothStep(0f, 1f, progress / 0.18f)
+                : Mathf.SmoothStep(1f, 0f, (progress - 0.18f) / 0.82f);
+            float side = playerStatus != null && (playerStatus.LocalGrabScareVariant % 2 == 0) ? -1f : 1f;
+            Transform focusTransform = ResolveMonsterFocusTransform(monster);
+            Vector3 monsterForward = Vector3.ProjectOnPlane(monster.transform.forward, Vector3.up).normalized;
+            if (monsterForward.sqrMagnitude <= 0.01f)
+            {
+                monsterForward = monster.transform.forward;
+            }
+
+            Vector3 monsterRight = Vector3.Cross(Vector3.up, monsterForward).normalized;
+            Vector3 focusPoint = focusTransform.position + monsterForward * 0.08f;
+            Vector3 basePosition = focusPoint -
+                                   monsterForward * grabCameraDistance +
+                                   monsterRight * grabCameraSideOffset * side +
+                                   Vector3.up * grabCameraLift;
+
+            float shake = compress * grabShakeAmplitude;
+            Vector3 shakeOffset = monsterRight * Mathf.Sin(Time.unscaledTime * grabShakeFrequency) * shake +
+                                  Vector3.up * Mathf.Cos(Time.unscaledTime * (grabShakeFrequency * 0.72f)) * shake * 0.8f;
+            Quaternion targetRotation = Quaternion.LookRotation((focusPoint - (basePosition + shakeOffset)).normalized, Vector3.up);
+
+            playerCamera.transform.SetPositionAndRotation(basePosition + shakeOffset, targetRotation);
+            playerCamera.fieldOfView = SettingsStore.FieldOfView - grabFovDrop * compress;
+            cameraRoot.rotation = Quaternion.Slerp(cameraRoot.rotation, targetRotation, Time.deltaTime * 24f);
+        }
+
+        private MonsterAI ResolveGrabScareMonster()
+        {
+            if (playerStatus == null)
+            {
+                return null;
+            }
+
+            uint monsterNetId = playerStatus.LocalGrabScareMonsterNetId;
+            if (monsterNetId != 0 && NetworkClient.spawned.TryGetValue(monsterNetId, out NetworkIdentity identity))
+            {
+                MonsterAI resolved = identity.GetComponent<MonsterAI>();
+                if (resolved != null)
+                {
+                    return resolved;
+                }
+            }
+
+            return MonsterAI.Instance;
+        }
+
+        private Transform ResolveMonsterFocusTransform(MonsterAI monster)
+        {
+            if (monster == null)
+            {
+                return transform;
+            }
+
+            foreach (Transform child in monster.GetComponentsInChildren<Transform>(true))
+            {
+                if (child == null)
+                {
+                    continue;
+                }
+
+                if (child.name.IndexOf("EyeGlow", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return child;
+                }
+
+                if (child.name.IndexOf("MonsterVisual", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return child;
+                }
+            }
+
+            return monster.transform;
         }
     }
 }

@@ -66,6 +66,21 @@ namespace AsylumHorror.Audio
             return GetOrCreate("door_open", () => CreatePulse("DoorOpen", 0.45f, 180f, 0.4f));
         }
 
+        public static AudioClip GetGrabImpactClip()
+        {
+            return GetOrCreate("grab_impact", () => CreateImpact("GrabImpact", 0.34f, 78f, 0.78f));
+        }
+
+        public static AudioClip GetMonsterSnarlClip()
+        {
+            return GetOrCreate("monster_snarl", () => CreateSnarl("MonsterSnarl", 0.65f, 0.56f));
+        }
+
+        public static AudioClip GetShockTailClip()
+        {
+            return GetOrCreate("shock_tail", () => CreateShockTail("ShockTail", 0.9f, 0.32f));
+        }
+
         public static AudioClip GetRescueClip()
         {
             return GetOrCreate("rescue_clip", () => CreatePulse("Rescue", 0.42f, 260f, 0.42f));
@@ -207,6 +222,64 @@ namespace AsylumHorror.Audio
                 float wobble = Mathf.Sin(2f * Mathf.PI * (baseFrequency * (1f + lerp * 0.2f)) * t);
                 float texture = (Mathf.PerlinNoise(t * 48f, 0.77f) - 0.5f) * 0.2f;
                 samples[i] = Mathf.Clamp((wobble * 0.85f + texture) * envelope * gain, -1f, 1f);
+            }
+
+            AudioClip clip = AudioClip.Create(clipName, sampleCount, 1, SampleRate, false);
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
+        private static AudioClip CreateImpact(string clipName, float durationSeconds, float bodyFrequency, float gain)
+        {
+            int sampleCount = Mathf.CeilToInt(durationSeconds * SampleRate);
+            float[] samples = new float[sampleCount];
+            for (int i = 0; i < sampleCount; i++)
+            {
+                float t = i / (float)SampleRate;
+                float impact = Mathf.Exp(-t * 13f);
+                float slam = Mathf.Sin(2f * Mathf.PI * bodyFrequency * t) * 0.65f;
+                float crack = Mathf.Sin(2f * Mathf.PI * (bodyFrequency * 2.8f) * t) * 0.18f;
+                float noise = (Mathf.PerlinNoise(t * 260f, 0.17f) - 0.5f) * 1.7f;
+                samples[i] = Mathf.Clamp((slam + crack + noise * 0.7f) * impact * gain, -1f, 1f);
+            }
+
+            AudioClip clip = AudioClip.Create(clipName, sampleCount, 1, SampleRate, false);
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
+        private static AudioClip CreateSnarl(string clipName, float durationSeconds, float gain)
+        {
+            int sampleCount = Mathf.CeilToInt(durationSeconds * SampleRate);
+            float[] samples = new float[sampleCount];
+            for (int i = 0; i < sampleCount; i++)
+            {
+                float t = i / (float)SampleRate;
+                float envelope = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / 0.07f)) *
+                                 Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((durationSeconds - t) / 0.28f));
+                float growl = Mathf.Sin(2f * Mathf.PI * 92f * t) * 0.42f +
+                              Mathf.Sin(2f * Mathf.PI * 146f * t) * 0.2f;
+                float rasp = (Mathf.PerlinNoise(t * 110f, 0.67f) - 0.5f) * 1.4f;
+                samples[i] = Mathf.Clamp((growl + rasp * 0.58f) * envelope * gain, -1f, 1f);
+            }
+
+            AudioClip clip = AudioClip.Create(clipName, sampleCount, 1, SampleRate, false);
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
+        private static AudioClip CreateShockTail(string clipName, float durationSeconds, float gain)
+        {
+            int sampleCount = Mathf.CeilToInt(durationSeconds * SampleRate);
+            float[] samples = new float[sampleCount];
+            for (int i = 0; i < sampleCount; i++)
+            {
+                float t = i / (float)SampleRate;
+                float lerp = Mathf.Clamp01(t / durationSeconds);
+                float tone = Mathf.Sin(2f * Mathf.PI * Mathf.Lerp(3400f, 1600f, lerp) * t) * 0.16f;
+                float wash = (Mathf.PerlinNoise(t * 34f, 0.41f) - 0.5f) * 0.42f;
+                float envelope = Mathf.SmoothStep(1f, 0f, lerp);
+                samples[i] = Mathf.Clamp((tone + wash) * envelope * gain, -1f, 1f);
             }
 
             AudioClip clip = AudioClip.Create(clipName, sampleCount, 1, SampleRate, false);

@@ -13,6 +13,7 @@ namespace AsylumHorror.Player
         [SerializeField] private AudioSource heartbeatSource;
         [SerializeField] private AudioSource breathingSource;
         [SerializeField] private AudioSource chaseMusicSource;
+        [SerializeField] private AudioSource scareSource;
 
         [Header("Clips")]
         [SerializeField] private AudioClip[] walkFootsteps;
@@ -31,11 +32,15 @@ namespace AsylumHorror.Player
         [SerializeField] private float heartbeatMaxDistance = 20f;
         [SerializeField] private float chaseMusicDistance = 16f;
         [SerializeField] private AudioClip traumaFumbleClip;
+        [SerializeField] private AudioClip grabImpactClip;
+        [SerializeField] private AudioClip grabSnarlClip;
+        [SerializeField] private AudioClip grabShockTailClip;
 
         private NetworkPlayerController playerController;
         private NetworkPlayerStatus playerStatus;
         private PlayerStressController stressController;
         private float nextStepTime;
+        private float grabMuffleEndsAt;
 
         private void Awake()
         {
@@ -52,9 +57,19 @@ namespace AsylumHorror.Player
                 stressController = GetComponent<PlayerStressController>();
             }
 
+            if (playerStatus == null)
+            {
+                playerStatus = GetComponent<NetworkPlayerStatus>();
+            }
+
             if (stressController != null)
             {
                 stressController.TraumaFumbled += OnTraumaFumbled;
+            }
+
+            if (playerStatus != null)
+            {
+                playerStatus.GrabScared += OnGrabScared;
             }
         }
 
@@ -63,6 +78,11 @@ namespace AsylumHorror.Player
             if (stressController != null)
             {
                 stressController.TraumaFumbled -= OnTraumaFumbled;
+            }
+
+            if (playerStatus != null)
+            {
+                playerStatus.GrabScared -= OnGrabScared;
             }
         }
 
@@ -155,6 +175,13 @@ namespace AsylumHorror.Player
                                 (monster.CurrentState == MonsterState.Chase || monster.CurrentState == MonsterState.Attack)
                 ? Mathf.Clamp01(Mathf.Max(chase01 * 0.16f, stress01 * 0.08f))
                 : 0f;
+            if (Time.time < grabMuffleEndsAt)
+            {
+                float muffle01 = Mathf.Clamp01((grabMuffleEndsAt - Time.time) / 0.65f);
+                heartbeatVolume = Mathf.Max(heartbeatVolume, muffle01 * 0.68f);
+                breathingVolume *= Mathf.Lerp(1f, 0.46f, muffle01);
+                chaseVolume *= Mathf.Lerp(1f, 0.18f, muffle01);
+            }
 
             SetFearVolumes(heartbeatVolume, breathingVolume, chaseVolume);
         }
@@ -254,6 +281,36 @@ namespace AsylumHorror.Player
             {
                 traumaFumbleClip = ProceduralAudioFactory.GetDoorOpenClip();
             }
+
+            if (grabImpactClip == null)
+            {
+                grabImpactClip = ProceduralAudioFactory.GetGrabImpactClip();
+            }
+
+            if (grabSnarlClip == null)
+            {
+                grabSnarlClip = ProceduralAudioFactory.GetMonsterSnarlClip();
+            }
+
+            if (grabShockTailClip == null)
+            {
+                grabShockTailClip = ProceduralAudioFactory.GetShockTailClip();
+            }
+
+            if (scareSource == null)
+            {
+                GameObject audioObject = new GameObject("LocalScareAudio");
+                audioObject.transform.SetParent(transform, false);
+                scareSource = audioObject.AddComponent<AudioSource>();
+            }
+
+            if (scareSource != null)
+            {
+                scareSource.playOnAwake = false;
+                scareSource.loop = false;
+                scareSource.spatialBlend = 0f;
+                scareSource.volume = 1f;
+            }
         }
 
         private void OnTraumaFumbled()
@@ -264,6 +321,31 @@ namespace AsylumHorror.Player
             }
 
             footstepsSource.PlayOneShot(traumaFumbleClip, 0.42f);
+        }
+
+        private void OnGrabScared()
+        {
+            if (!isLocalPlayer || scareSource == null)
+            {
+                return;
+            }
+
+            grabMuffleEndsAt = Time.time + 0.65f;
+            scareSource.pitch = 1f + Random.Range(-0.04f, 0.04f);
+            if (grabImpactClip != null)
+            {
+                scareSource.PlayOneShot(grabImpactClip, 1f);
+            }
+
+            if (grabSnarlClip != null)
+            {
+                scareSource.PlayOneShot(grabSnarlClip, 0.84f);
+            }
+
+            if (grabShockTailClip != null)
+            {
+                scareSource.PlayOneShot(grabShockTailClip, 0.46f);
+            }
         }
     }
 }

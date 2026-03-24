@@ -313,6 +313,13 @@ MonoBehaviour:
   lookPitchMin: -80
   lookPitchMax: 80
   incapacitatedYawLimit: 85
+  grabCameraDistance: 0.42
+  grabCameraHeight: 1.58
+  grabCameraSideOffset: 0.18
+  grabCameraLift: 0.08
+  grabFovDrop: 11
+  grabShakeAmplitude: 0.075
+  grabShakeFrequency: 34
   lobbyWalkSpeed: 3.2
   lobbyRunSpeed: 4.6
   lobbyBoundsCenter: {x: 0, y: 0, z: 0.5}
@@ -442,6 +449,7 @@ MonoBehaviour:
   heartbeatSource: {fileID: 2952417913135509927}
   breathingSource: {fileID: 8583186692117630937}
   chaseMusicSource: {fileID: 4670990633805794447}
+  scareSource: {fileID: 0}
   walkFootsteps:
   - {fileID: 8300000, guid: 15774e8df8d9536429affbd8fd98ba44, type: 3}
   - {fileID: 8300000, guid: e15b0a82b31eb7b418b2bd4eec9c80e6, type: 3}
@@ -464,6 +472,9 @@ MonoBehaviour:
   heartbeatMaxDistance: 20
   chaseMusicDistance: 16
   traumaFumbleClip: {fileID: 0}
+  grabImpactClip: {fileID: 0}
+  grabSnarlClip: {fileID: 0}
+  grabShockTailClip: {fileID: 0}
 --- !u!82 &1404293324131254561
 AudioSource:
   m_ObjectHideFlags: 0
@@ -961,6 +972,11 @@ MonoBehaviour:
   bloomStrength: 0.035
   stressVignetteBoost: 0.14
   stressGrainBoost: 0.02
+  shockVignetteBoost: 0.22
+  shockGrainBoost: 0.05
+  shockExposureDrop: 0.18
+  shockBloomBoost: 0.05
+  shockTint: {r: 0.95, g: 0.84, b: 0.84, a: 1}
   effectShader: {fileID: 4800000, guid: 458a70363d2b32f45928f4f3d0445424, type: 3}
 --- !u!81 &3498110584138003802
 AudioListener:

@@ -15,6 +15,10 @@ namespace AsylumHorror.Monster
         [SerializeField] private float chaseLean = 8f;
         [SerializeField] private float swayAngle = 5.5f;
         [SerializeField] private float visualFollowSpeed = 8f;
+        [SerializeField] private float grabLungeDistance = 0.34f;
+        [SerializeField] private float grabLungeLift = 0.09f;
+        [SerializeField] private float grabLungeLean = 30f;
+        [SerializeField] private float grabLungeRoll = 6.5f;
 
         private MonsterAI monsterAI;
         private NavMeshAgent navMeshAgent;
@@ -119,6 +123,30 @@ namespace AsylumHorror.Monster
 
             Vector3 targetPosition = baseLocalPosition + new Vector3(0f, bob, 0f);
             Quaternion targetRotation = baseLocalRotation * Quaternion.Euler(forwardLean, sideSway, roll);
+
+            if (monsterAI.GrabPresentationActive)
+            {
+                float grab01 = monsterAI.GrabPresentation01;
+                float slam01 = grab01 < 0.18f
+                    ? Mathf.SmoothStep(0f, 1f, grab01 / 0.18f)
+                    : Mathf.SmoothStep(1f, 0f, (grab01 - 0.18f) / 0.82f);
+                float side = (monsterAI.GrabPresentationVariant % 2 == 0) ? -1f : 1f;
+                targetPosition += Vector3.forward * (grabLungeDistance * slam01) + Vector3.up * (grabLungeLift * slam01);
+                targetRotation *= Quaternion.Euler(-grabLungeLean * slam01, side * swayAngle * 0.45f * slam01, side * grabLungeRoll * slam01);
+
+                Transform victim = monsterAI.ResolveGrabPresentationVictimTransform();
+                if (victim != null)
+                {
+                    Vector3 toVictim = victim.position - transform.position;
+                    toVictim.y = 0f;
+                    if (toVictim.sqrMagnitude > 0.02f)
+                    {
+                        Vector3 localDirection = transform.InverseTransformDirection(toVictim.normalized);
+                        float victimYaw = Mathf.Clamp(Mathf.Atan2(localDirection.x, localDirection.z) * Mathf.Rad2Deg, -22f, 22f);
+                        targetRotation *= Quaternion.Euler(0f, victimYaw * slam01, 0f);
+                    }
+                }
+            }
 
             visualRoot.localPosition = Vector3.Lerp(visualRoot.localPosition, targetPosition, Time.deltaTime * visualFollowSpeed);
             visualRoot.localRotation = Quaternion.Slerp(visualRoot.localRotation, targetRotation, Time.deltaTime * visualFollowSpeed);
