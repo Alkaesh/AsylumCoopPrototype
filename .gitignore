@@ -1,0 +1,59 @@
+# Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+UserSettings/
+MemoryCaptures/
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+sysinfo.txt
+
+# Unity generated meta backup noise
+Assets/**/TextMesh Pro/*.asset
+
+# OS / tooling
+.DS_Store
+Thumbs.db
+.vs/
+.idea/
+
+# Local automation scratch
+automation/_mirror_tmp/
+automation/_kenney_tmp/
+automation/_asset_dl/
+automation/downloads/
+automation/asset_probe_test/
+_quarantine/
+
+# Generated logs / research dumps
+FULL_CODE_DUMP.txt
+automation/*.log
+automation/*.html
+automation/*.json
+automation/*.yaml
+automation/*.yml
+automation/*_chunk.js
+automation/*_swagger*.js
+automation/*_apispec*
+
+# Windows metadata
+desktop.ini
+*.url
