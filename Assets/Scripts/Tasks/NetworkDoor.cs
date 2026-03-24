@@ -126,40 +126,40 @@ namespace AsylumHorror.Tasks
         {
             if (isTransitioning)
             {
-                return "Door Moving";
+                return string.Empty;
             }
 
             if (isOpen)
             {
-                return "E: Close Door";
+                return "E: Ease shut";
             }
 
             if (!isLocked)
             {
-                return "E: Open Door";
+                return "E: Ease open";
             }
 
             if (!HasUnlockRequirements())
             {
                 if (requiresPower && requiresKeycard)
                 {
-                    return "Locked: Need Power + Keycard";
+                    return "No power. No clearance.";
                 }
 
                 if (requiresPower)
                 {
-                    return "Locked: Need Power";
+                    return "The lock has no power";
                 }
 
                 if (requiresKeycard)
                 {
-                    return "Locked: Need Keycard";
+                    return "The lock wants clearance";
                 }
 
-                return "Locked Door";
+                return "It will not move";
             }
 
-            return "E: Unlock Door";
+            return "E: Release lock";
         }
 
         [Server]

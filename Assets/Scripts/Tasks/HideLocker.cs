@@ -31,10 +31,10 @@ namespace AsylumHorror.Tasks
         {
             if (player != null && occupantNetId == player.netId)
             {
-                return "E: Exit Hideout";
+                return "E: Step out";
             }
 
-            return occupantNetId == 0 ? $"E: {InteractionName}" : "Hideout Occupied";
+            return occupantNetId == 0 ? "E: Hide" : "No room";
         }
 
         [Server]

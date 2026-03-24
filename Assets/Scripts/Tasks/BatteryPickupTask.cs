@@ -41,7 +41,7 @@ namespace AsylumHorror.Tasks
         {
             if (consumed)
             {
-                return "Battery Used";
+                return string.Empty;
             }
 
             if (!spawnEnabled)
@@ -49,7 +49,7 @@ namespace AsylumHorror.Tasks
                 return string.Empty;
             }
 
-            return "E: Insert Battery";
+            return "E: Replace cell";
         }
 
         [Server]

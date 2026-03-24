@@ -36,15 +36,15 @@ namespace AsylumHorror.Tasks
         {
             if (restored)
             {
-                return "Power Restored";
+                return string.Empty;
             }
 
             if (!ArePrerequisitesMet())
             {
-                return "Need: 2 Generators + Keycard";
+                return "The final relay is still dead";
             }
 
-            return "Hold E: Restore Power";
+            return "Hold E: Route main power";
         }
 
         [Server]

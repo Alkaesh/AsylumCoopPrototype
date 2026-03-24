@@ -323,6 +323,12 @@ namespace AsylumHorror.EditorTools
             playerCamera.nearClipPlane = 0.03f;
             playerCamera.useOcclusionCulling = false;
             playerCamera.allowHDR = true;
+            HorrorScreenFX playerScreenFx = cameraObject.AddComponent<HorrorScreenFX>();
+            SetReference(playerScreenFx, "effectShader", AssetDatabase.LoadAssetAtPath<Shader>("Assets/Shaders/HorrorScreenFX.shader"));
+            SetFloat(playerScreenFx, "exposure", 0.91f);
+            SetFloat(playerScreenFx, "vignette", 0.31f);
+            SetFloat(playerScreenFx, "grain", 0.03f);
+            SetFloat(playerScreenFx, "bloomStrength", 0.035f);
             AudioListener audioListener = cameraObject.AddComponent<AudioListener>();
 
             GameObject flashlightObject = new GameObject("FlashlightLight");
@@ -1389,6 +1395,12 @@ namespace AsylumHorror.EditorTools
             camera.nearClipPlane = 0.03f;
             camera.farClipPlane = 120f;
             camera.allowHDR = true;
+            HorrorScreenFX lobbyScreenFx = cameraObject.AddComponent<HorrorScreenFX>();
+            SetReference(lobbyScreenFx, "effectShader", AssetDatabase.LoadAssetAtPath<Shader>("Assets/Shaders/HorrorScreenFX.shader"));
+            SetBool(lobbyScreenFx, "menuProfile", true);
+            SetFloat(lobbyScreenFx, "exposure", 0.95f);
+            SetFloat(lobbyScreenFx, "vignette", 0.18f);
+            SetFloat(lobbyScreenFx, "grain", 0.015f);
             cameraObject.AddComponent<AudioListener>();
             cameraObject.AddComponent<LobbyFallbackCamera>();
 
@@ -1633,7 +1645,7 @@ namespace AsylumHorror.EditorTools
             scene.name = "HospitalLevel";
 
             ConfigureHospitalRenderSettings();
-            CreateDirectionalLight(new Color(0.8f, 0.85f, 1f), 0.2f, new Vector3(35f, -55f, 0f));
+            CreateDirectionalLight(new Color(0.66f, 0.72f, 0.82f), 0.09f, new Vector3(35f, -55f, 0f));
 
             Transform systemsRoot = new GameObject("Systems").transform;
 
@@ -1674,7 +1686,7 @@ namespace AsylumHorror.EditorTools
             ambientLoopSource.loop = true;
             ambientLoopSource.playOnAwake = false;
             ambientLoopSource.spatialBlend = 0f;
-            ambientLoopSource.volume = 0.08f;
+            ambientLoopSource.volume = 0.05f;
             ambientLoopSource.clip = LoadAudioClipAsset(AmbientLoopClipPath);
             AudioSource ambientOneShotSource = ambientAudioObject.AddComponent<AudioSource>();
             ambientOneShotSource.playOnAwake = false;
@@ -1871,6 +1883,7 @@ namespace AsylumHorror.EditorTools
 
             PlaceArchitecturalLandmarks(root);
             PlaceHorrorDetails(root);
+            PlaceAtmosphereWear(root);
             PlaceEnvironmentalDebris(root);
             PlaceHospitalSetDressing(root);
             PlaceModularShellDressings(root);
@@ -2018,6 +2031,33 @@ namespace AsylumHorror.EditorTools
             PlaceAssetProp(root, "Assets/ThirdParty/PolyPizza/PostApocalypse/BloodSplat/Blood_2.fbx", "BloodSplat_B", new Vector3(30f, 0.01f, 26f), Quaternion.Euler(0f, -12f, 0f), 0.12f, "blood");
         }
 
+        private static void PlaceAtmosphereWear(Transform root)
+        {
+            CreateWallPatch(root, "OfficePeel_A", new Vector3(-41.7f, 1.6f, 31.4f), new Vector2(3.8f, 1.6f), 90f, new Color(0.11f, 0.12f, 0.11f), "wall_damaged");
+            CreateWallPatch(root, "OfficePeel_B", new Vector3(41.7f, 1.52f, 30.2f), new Vector2(4.2f, 1.4f), -90f, new Color(0.12f, 0.11f, 0.1f), "wall_damaged");
+            CreateWallPatch(root, "ArchiveMold_A", new Vector3(-42.1f, 1.42f, 7.4f), new Vector2(3.6f, 1.1f), 90f, new Color(0.08f, 0.11f, 0.1f), "wall_damaged");
+            CreateWallPatch(root, "ArchiveMold_B", new Vector3(-26.2f, 1.3f, 14.6f), new Vector2(2.4f, 1.6f), 180f, new Color(0.09f, 0.1f, 0.09f), "wall_damaged");
+            CreateFloorPatch(root, "ArchiveLeak_A", new Vector3(-33.8f, 0.025f, 10.8f), new Vector2(2.8f, 1.4f), 8f, new Color(0.14f, 0.13f, 0.11f), "tile_dirty");
+
+            CreateFloorPatch(root, "HubWear_A", new Vector3(0f, 0.025f, 10.2f), new Vector2(5.8f, 1.8f), 0f, new Color(0.14f, 0.12f, 0.11f), "tile_dirty");
+            CreateWallPatch(root, "HubScorch_A", new Vector3(-11.7f, 1.4f, 10f), new Vector2(1.6f, 2.2f), 90f, new Color(0.1f, 0.08f, 0.08f), "wall_damaged");
+            CreateWallPatch(root, "HubScorch_B", new Vector3(11.7f, 1.4f, 10f), new Vector2(1.6f, 2.2f), -90f, new Color(0.1f, 0.08f, 0.08f), "wall_damaged");
+
+            CreateFloorPatch(root, "SurgeryTile_A", new Vector3(35.2f, 0.025f, 3.6f), new Vector2(4.8f, 2.4f), 0f, new Color(0.16f, 0.14f, 0.14f), "tile_dirty");
+            CreateWallPatch(root, "SurgeryPanel_A", new Vector3(41.7f, 1.55f, 2.8f), new Vector2(3.2f, 1.8f), -90f, new Color(0.13f, 0.1f, 0.1f), "wall_damaged");
+
+            CreateWallPatch(root, "ServiceRust_A", new Vector3(-42f, 1.45f, -24.8f), new Vector2(4.2f, 1.5f), 90f, new Color(0.15f, 0.11f, 0.08f), "rusted_metal");
+            CreateWallPatch(root, "ServiceRust_B", new Vector3(-32.2f, 2.4f, -18.7f), new Vector2(2.8f, 0.9f), 180f, new Color(0.18f, 0.12f, 0.08f), "rusted_metal");
+            CreateFloorPatch(root, "ServiceLeak_A", new Vector3(-29.6f, 0.025f, -19.4f), new Vector2(2.2f, 1.1f), 12f, new Color(0.12f, 0.12f, 0.1f), "tile_dirty");
+
+            CreateWallPatch(root, "MaintRust_A", new Vector3(41.8f, 1.55f, -24.4f), new Vector2(3.9f, 1.6f), -90f, new Color(0.15f, 0.1f, 0.08f), "rusted_metal");
+            CreateFloorPatch(root, "MaintOil_A", new Vector3(30.8f, 0.025f, -31.4f), new Vector2(2.9f, 1.25f), -16f, new Color(0.1f, 0.1f, 0.1f), "tile_dirty");
+
+            CreateWallPatch(root, "MorgueColdStain_A", new Vector3(-6f, 1.42f, -46.9f), new Vector2(3.4f, 1.3f), 180f, new Color(0.11f, 0.13f, 0.15f), "wall_damaged");
+            CreateWallPatch(root, "MorgueColdStain_B", new Vector3(6f, 1.42f, -46.9f), new Vector2(3.4f, 1.3f), 180f, new Color(0.11f, 0.13f, 0.15f), "wall_damaged");
+            CreateFloorPatch(root, "MorgueColdTile_A", new Vector3(0f, 0.025f, -40.1f), new Vector2(4.8f, 2.4f), 0f, new Color(0.13f, 0.15f, 0.16f), "tile_dirty");
+        }
+
         private static void PlaceEnvironmentalDebris(Transform root)
         {
             CreateCube(root, "CollapsedShelf_A", new Vector3(-6f, 0.34f, 33f), new Vector3(2.6f, 0.42f, 0.6f), new Color(0.14f, 0.14f, 0.16f), "metal");
@@ -2142,16 +2182,19 @@ namespace AsylumHorror.EditorTools
             PlaceRawAssetProp(root, QuaterniusWall5AssetPath, "SecurityPanel_NorthEast", new Vector3(17.8f, 0f, 48.4f), Quaternion.identity, 3.15f);
             PlaceRawAssetProp(root, QuaterniusColumn2AssetPath, "SecurityColumn_West", new Vector3(-12.4f, 0f, 34.8f), Quaternion.identity, 3.05f);
             PlaceRawAssetProp(root, QuaterniusColumn2AssetPath, "SecurityColumn_East", new Vector3(12.4f, 0f, 34.8f), Quaternion.identity, 3.05f);
+            PlaceRawAssetProp(root, QuaterniusWall2AssetPath, "SecurityLintel_A", new Vector3(0f, 0f, 28.8f), Quaternion.identity, 3.1f);
 
             PlaceRawAssetProp(root, QuaterniusWall2AssetPath, "ArchivePanel_A", new Vector3(-42.2f, 0f, 10.6f), Quaternion.Euler(0f, 90f, 0f), 3.05f);
             PlaceRawAssetProp(root, QuaterniusWall2AssetPath, "ArchivePanel_B", new Vector3(-42.2f, 0f, -4.6f), Quaternion.Euler(0f, 90f, 0f), 3.05f);
             PlaceRawAssetProp(root, QuaterniusColumn2AssetPath, "ArchiveColumn_A", new Vector3(-26.9f, 0f, 15.1f), Quaternion.identity, 3f);
             PlaceRawAssetProp(root, QuaterniusPipesLongAssetPath, "ArchivePipe_A", new Vector3(-33.8f, 2.95f, 15.2f), Quaternion.Euler(0f, 90f, 0f), 0.58f);
+            PlaceRawAssetProp(root, QuaterniusShelfTallAssetPath, "ArchiveFrameShelf_A", new Vector3(-39.8f, 0f, 13.6f), Quaternion.identity, 0.92f);
 
             PlaceRawAssetProp(root, QuaterniusWall5AssetPath, "LabPanel_A", new Vector3(42.4f, 0f, 11.2f), Quaternion.Euler(0f, -90f, 0f), 3.15f);
             PlaceRawAssetProp(root, QuaterniusWall2AssetPath, "LabPanel_B", new Vector3(42.4f, 0f, -7.8f), Quaternion.Euler(0f, -90f, 0f), 3.15f);
             PlaceRawAssetProp(root, QuaterniusColumn2AssetPath, "LabColumn_A", new Vector3(26.8f, 0f, 13.6f), Quaternion.identity, 3.05f);
             PlaceRawAssetProp(root, QuaterniusComputerAssetPath, "LabConsole_A", new Vector3(28.6f, 0f, 12.1f), Quaternion.Euler(0f, 90f, 0f), 1.04f);
+            PlaceRawAssetProp(root, QuaterniusWall2AssetPath, "LabFrame_Operation", new Vector3(18.2f, 0f, 0f), Quaternion.Euler(0f, -90f, 0f), 3.05f);
 
             PlaceRawAssetProp(root, QuaterniusWall2AssetPath, "ServicePanel_A", new Vector3(-42.1f, 0f, -34.8f), Quaternion.Euler(0f, 90f, 0f), 3.15f);
             PlaceRawAssetProp(root, QuaterniusWall5AssetPath, "ServicePanel_B", new Vector3(-42.1f, 0f, -21.4f), Quaternion.Euler(0f, 90f, 0f), 3.15f);
@@ -2175,21 +2218,27 @@ namespace AsylumHorror.EditorTools
 
         private static void CreateHospitalLights(Transform root)
         {
-            CreatePointLight(root, "Light_Security", new Vector3(0f, 3.2f, 42f), 14f, 0.16f, true);
-            CreatePointLight(root, "Light_AdminWest", new Vector3(-34f, 3.2f, 34f), 12f, 0.13f, true);
-            CreatePointLight(root, "Light_AdminEast", new Vector3(34f, 3.2f, 34f), 12f, 0.13f, true);
-            CreatePointLight(root, "Light_HubNorth", new Vector3(0f, 3.2f, 16f), 16f, 0.14f, true);
-            CreatePointLight(root, "Light_HubCenter", new Vector3(0f, 3.2f, 0f), 18f, 0.1f, false);
-            CreatePointLight(root, "Light_Archive", new Vector3(-34f, 3.2f, 4f), 13f, 0.13f, true);
-            CreatePointLight(root, "Light_Lab", new Vector3(34f, 3.2f, 4f), 13f, 0.13f, true);
-            CreatePointLight(root, "Light_Service", new Vector3(-32f, 3.2f, -28f), 14f, 0.11f, true);
-            CreatePointLight(root, "Light_Maint", new Vector3(32f, 3.2f, -28f), 14f, 0.11f, true);
-            CreatePointLight(root, "Light_Morgue", new Vector3(0f, 3.2f, -42f), 12f, 0.09f, true);
-            CreateColoredPointLight(root, "Light_ArchiveCold", new Vector3(-34f, 2.6f, 2f), 10f, 0.08f, new Color(0.72f, 0.78f, 0.88f), false);
-            CreateColoredPointLight(root, "Light_OperationRed", new Vector3(35f, 2.7f, 2.4f), 10f, 0.24f, new Color(0.8f, 0.08f, 0.08f), true);
-            CreateColoredPointLight(root, "Light_ServerBlue", new Vector3(30f, 2.7f, -27f), 11f, 0.18f, new Color(0.16f, 0.4f, 0.76f), true);
-            CreateColoredPointLight(root, "Light_ServiceGreen", new Vector3(-32f, 2.6f, -20f), 10f, 0.1f, new Color(0.42f, 0.54f, 0.42f), true);
-            CreateColoredPointLight(root, "Light_MorgueCold", new Vector3(0f, 2.7f, -40.2f), 9f, 0.14f, new Color(0.7f, 0.86f, 0.98f), true);
+            CreatePointLight(root, "Light_Security", new Vector3(0f, 3.2f, 42f), 13f, 0.11f, true);
+            CreatePointLight(root, "Light_AdminWest", new Vector3(-34f, 3.2f, 34f), 11f, 0.095f, true);
+            CreatePointLight(root, "Light_AdminEast", new Vector3(34f, 3.2f, 34f), 11f, 0.095f, true);
+            CreatePointLight(root, "Light_HubNorth", new Vector3(0f, 3.2f, 16f), 14f, 0.1f, true);
+            CreatePointLight(root, "Light_HubCenter", new Vector3(0f, 3.2f, 0f), 15f, 0.055f, false);
+            CreatePointLight(root, "Light_Archive", new Vector3(-34f, 3.2f, 4f), 11f, 0.09f, true);
+            CreatePointLight(root, "Light_Lab", new Vector3(34f, 3.2f, 4f), 11f, 0.085f, true);
+            CreatePointLight(root, "Light_Service", new Vector3(-32f, 3.2f, -28f), 13f, 0.08f, true);
+            CreatePointLight(root, "Light_Maint", new Vector3(32f, 3.2f, -28f), 13f, 0.08f, true);
+            CreatePointLight(root, "Light_Morgue", new Vector3(0f, 3.2f, -42f), 10f, 0.06f, true);
+            CreateColoredPointLight(root, "Light_ArchiveCold", new Vector3(-34f, 2.6f, 2f), 10f, 0.11f, new Color(0.68f, 0.78f, 0.88f), false);
+            CreateColoredPointLight(root, "Light_OperationRed", new Vector3(35f, 2.7f, 2.4f), 9f, 0.2f, new Color(0.8f, 0.08f, 0.08f), true);
+            CreateColoredPointLight(root, "Light_ServerBlue", new Vector3(30f, 2.7f, -27f), 10f, 0.14f, new Color(0.16f, 0.4f, 0.76f), true);
+            CreateColoredPointLight(root, "Light_ServiceGreen", new Vector3(-32f, 2.6f, -20f), 10f, 0.08f, new Color(0.36f, 0.5f, 0.4f), true);
+            CreateColoredPointLight(root, "Light_MorgueCold", new Vector3(0f, 2.7f, -40.2f), 8f, 0.12f, new Color(0.7f, 0.86f, 0.98f), true);
+            CreateColoredPointLight(root, "Light_SecurityWatch", new Vector3(-8f, 2.5f, 45f), 7f, 0.07f, new Color(0.58f, 0.68f, 0.78f), true);
+            CreateColoredPointLight(root, "Light_HubBeacon_West", new Vector3(-9.4f, 2.25f, 9.2f), 6f, 0.06f, new Color(0.65f, 0.7f, 0.78f), false);
+            CreateColoredPointLight(root, "Light_HubBeacon_East", new Vector3(9.4f, 2.25f, 9.2f), 6f, 0.06f, new Color(0.65f, 0.7f, 0.78f), false);
+            CreateColoredPointLight(root, "Light_ArchiveAisle_Back", new Vector3(-33.6f, 2.45f, 11.2f), 7f, 0.075f, new Color(0.6f, 0.7f, 0.78f), true);
+            CreateColoredPointLight(root, "Light_ServiceBoiler", new Vector3(-28.4f, 2.2f, -18.4f), 7f, 0.065f, new Color(0.55f, 0.4f, 0.22f), true);
+            CreateColoredPointLight(root, "Light_MorgueSlab", new Vector3(0f, 2.15f, -40.2f), 5.4f, 0.08f, new Color(0.72f, 0.84f, 0.94f), false);
 
             GameObject emergency = new GameObject("EmergencyRedLight_Morgue");
             emergency.transform.SetParent(root, false);
@@ -2197,10 +2246,10 @@ namespace AsylumHorror.EditorTools
             Light emergencyLight = emergency.AddComponent<Light>();
             emergencyLight.type = LightType.Point;
             emergencyLight.range = 18f;
-            emergencyLight.intensity = 0.82f;
+            emergencyLight.intensity = 0.72f;
             emergencyLight.color = new Color(0.74f, 0.08f, 0.08f);
             FlickerLight emergencyFlicker = emergency.AddComponent<FlickerLight>();
-            emergencyFlicker.SetBaseIntensity(0.88f);
+            emergencyFlicker.SetBaseIntensity(0.72f);
 
             GameObject emergencyHall = new GameObject("EmergencyRedLight_Hall");
             emergencyHall.transform.SetParent(root, false);
@@ -2208,10 +2257,10 @@ namespace AsylumHorror.EditorTools
             Light emergencyHallLight = emergencyHall.AddComponent<Light>();
             emergencyHallLight.type = LightType.Point;
             emergencyHallLight.range = 12f;
-            emergencyHallLight.intensity = 0.57f;
+            emergencyHallLight.intensity = 0.48f;
             emergencyHallLight.color = new Color(0.7f, 0.12f, 0.1f);
             FlickerLight hallFlicker = emergencyHall.AddComponent<FlickerLight>();
-            hallFlicker.SetBaseIntensity(0.57f);
+            hallFlicker.SetBaseIntensity(0.48f);
 
             GameObject corridorAlarm = new GameObject("EmergencyRedLight_Cross");
             corridorAlarm.transform.SetParent(root, false);
@@ -2219,10 +2268,10 @@ namespace AsylumHorror.EditorTools
             Light corridorAlarmLight = corridorAlarm.AddComponent<Light>();
             corridorAlarmLight.type = LightType.Point;
             corridorAlarmLight.range = 10f;
-            corridorAlarmLight.intensity = 0.46f;
+            corridorAlarmLight.intensity = 0.4f;
             corridorAlarmLight.color = new Color(0.65f, 0.1f, 0.1f);
             FlickerLight corridorAlarmFlicker = corridorAlarm.AddComponent<FlickerLight>();
-            corridorAlarmFlicker.SetBaseIntensity(0.46f);
+            corridorAlarmFlicker.SetBaseIntensity(0.4f);
         }
 
         private static void CreatePlayerSpawnPoints(Transform root)
@@ -2698,12 +2747,12 @@ namespace AsylumHorror.EditorTools
         private static void ConfigureHospitalRenderSettings()
         {
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.028f, 0.03f, 0.035f);
+            RenderSettings.ambientLight = new Color(0.012f, 0.014f, 0.017f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.033f;
-            RenderSettings.fogColor = new Color(0.032f, 0.035f, 0.042f);
-            RenderSettings.reflectionIntensity = 0.28f;
+            RenderSettings.fogDensity = 0.043f;
+            RenderSettings.fogColor = new Color(0.022f, 0.027f, 0.031f);
+            RenderSettings.reflectionIntensity = 0.14f;
         }
 
         private static GameObject CreateCube(
@@ -2810,6 +2859,40 @@ namespace AsylumHorror.EditorTools
             Object.DestroyImmediate(streak.GetComponent<Collider>());
             Renderer renderer = streak.GetComponent<Renderer>();
             renderer.sharedMaterial = CreateMaterial(new Color(0.2f, 0.035f, 0.035f), "blood");
+        }
+
+        private static void CreateWallPatch(Transform parent, string name, Vector3 position, Vector2 size, float yaw, Color color, string style)
+        {
+            GameObject patch = CreateCube(
+                parent,
+                name,
+                position,
+                new Vector3(Mathf.Max(0.2f, size.x), Mathf.Max(0.2f, size.y), 0.04f),
+                color,
+                style);
+            patch.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            Collider collider = patch.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Object.DestroyImmediate(collider);
+            }
+        }
+
+        private static void CreateFloorPatch(Transform parent, string name, Vector3 position, Vector2 size, float yaw, Color color, string style)
+        {
+            GameObject patch = CreateCube(
+                parent,
+                name,
+                position,
+                new Vector3(Mathf.Max(0.2f, size.x), 0.02f, Mathf.Max(0.2f, size.y)),
+                color,
+                style);
+            patch.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            Collider collider = patch.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Object.DestroyImmediate(collider);
+            }
         }
 
         private static void CreateScareTrigger(Transform parent, string name, Vector3 position, Vector3 triggerSize)
@@ -3459,14 +3542,24 @@ namespace AsylumHorror.EditorTools
                     return GetOrCreateNoiseTexture("ceiling", new Color(0.05f, 0.05f, 0.06f), new Color(0.11f, 0.11f, 0.12f), 5.4f, 14f, 0.08f, 1.15f);
                 case "wall":
                     return GetOrCreateNoiseTexture("wall", new Color(0.075f, 0.076f, 0.08f), new Color(0.2f, 0.205f, 0.215f), 10.5f, 33f, 0.34f, 1.58f);
+                case "wall_damaged":
+                    return GetOrCreateNoiseTexture("wall_damaged", new Color(0.05f, 0.055f, 0.06f), new Color(0.18f, 0.18f, 0.17f), 12f, 38f, 0.42f, 1.8f);
                 case "metal":
                     return GetOrCreateNoiseTexture("metal", new Color(0.13f, 0.13f, 0.14f), new Color(0.26f, 0.26f, 0.28f), 8f, 21f, 0.22f, 1.45f);
+                case "rusted_metal":
+                    return GetOrCreateNoiseTexture("rusted_metal", new Color(0.09f, 0.07f, 0.06f), new Color(0.34f, 0.2f, 0.12f), 9f, 26f, 0.31f, 1.62f);
+                case "tile_dirty":
+                    return GetOrCreateNoiseTexture("tile_dirty", new Color(0.07f, 0.075f, 0.08f), new Color(0.2f, 0.2f, 0.19f), 8.2f, 22f, 0.2f, 1.35f);
                 case "door_frame":
                     return GetOrCreateNoiseTexture("door_frame", new Color(0.1f, 0.1f, 0.11f), new Color(0.23f, 0.23f, 0.25f), 7.2f, 20f, 0.24f, 1.4f);
                 case "door_leaf":
                     return GetOrCreateNoiseTexture("door_leaf", new Color(0.09f, 0.1f, 0.11f), new Color(0.2f, 0.21f, 0.23f), 9f, 24f, 0.18f, 1.35f);
                 case "door_handle":
                     return GetOrCreateNoiseTexture("door_handle", new Color(0.32f, 0.32f, 0.3f), new Color(0.62f, 0.62f, 0.58f), 10f, 28f, 0.1f, 1.1f);
+                case "wood":
+                    return GetOrCreateNoiseTexture("wood", new Color(0.09f, 0.07f, 0.05f), new Color(0.24f, 0.19f, 0.14f), 8f, 18f, 0.12f, 1.22f);
+                case "fabric":
+                    return GetOrCreateNoiseTexture("fabric", new Color(0.08f, 0.07f, 0.07f), new Color(0.18f, 0.15f, 0.15f), 5f, 15f, 0.05f, 1.08f);
                 case "player_jacket":
                     return GetOrCreateNoiseTexture("player_jacket", new Color(0.17f, 0.22f, 0.25f), new Color(0.4f, 0.46f, 0.5f), 5f, 13f, 0.07f, 1.1f);
                 case "player_pants":
@@ -3563,15 +3656,18 @@ namespace AsylumHorror.EditorTools
             switch (safeStyle)
             {
                 case "metal":
+                case "rusted_metal":
                 case "door_frame":
                 case "door_leaf":
                 case "door_handle":
                     SetMaterialFloat(material, "_Metallic", 0.34f);
-                    SetMaterialFloat(material, "_Smoothness", 0.26f);
-                    SetMaterialFloat(material, "_Glossiness", 0.26f);
+                    SetMaterialFloat(material, "_Smoothness", safeStyle == "rusted_metal" ? 0.12f : 0.26f);
+                    SetMaterialFloat(material, "_Glossiness", safeStyle == "rusted_metal" ? 0.12f : 0.26f);
                     break;
                 case "blood":
                 case "monster_skin":
+                case "wall_damaged":
+                case "tile_dirty":
                     SetMaterialFloat(material, "_Metallic", 0.02f);
                     SetMaterialFloat(material, "_Smoothness", 0.12f);
                     SetMaterialFloat(material, "_Glossiness", 0.12f);

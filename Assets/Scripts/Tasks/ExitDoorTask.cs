@@ -56,15 +56,15 @@ namespace AsylumHorror.Tasks
             GameStateManager gameState = GameStateManager.Instance;
             if (isOpen)
             {
-                return "Hold E: Escape";
+                return "Hold E: Go";
             }
 
             if (gameState == null || !gameState.AreCoreTasksCompleted)
             {
-                return "Finish all tasks first";
+                return "The breach is still sealed";
             }
 
-            return "Hold E: Open Main Exit";
+            return "Hold E: Pull the breach open";
         }
 
         [Server]

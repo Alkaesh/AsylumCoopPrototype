@@ -43,6 +43,10 @@ namespace AsylumHorror.Monster
         [SerializeField] private float carrySpeed = 3.1f;
         [SerializeField] private float patrolStoppingDistance = 0.9f;
         [SerializeField] private Vector2 patrolPauseRange = new Vector2(0.9f, 2f);
+        [SerializeField] private Vector2 investigateListenRange = new Vector2(0.45f, 1f);
+        [SerializeField] private Vector2 searchListenRange = new Vector2(0.55f, 1.2f);
+        [SerializeField] private float directCommitDistance = 5.1f;
+        [SerializeField] private float alertedCommitDistance = 10.6f;
 
         [Header("State Timers")]
         [SerializeField] private float investigateTimeout = 7f;
@@ -110,6 +114,8 @@ namespace AsylumHorror.Monster
         private double nextSearchPointAt;
         private Vector3 currentSearchPoint;
         private double attackResolveAt;
+        private double investigateListenEndsAt;
+        private double searchListenEndsAt;
         private double nextFootstepAt;
         private HookPoint targetHookPoint;
         private double carryStartedAt;
@@ -126,9 +132,11 @@ namespace AsylumHorror.Monster
         private Vector3 carryLastPosition;
         private Vector3 lastTravelProgressPosition;
         private readonly Dictionary<uint, double> blockedHookUntil = new Dictionary<uint, double>();
+        private readonly MonsterMemory memory = new MonsterMemory();
         private Light revealLight;
         private float revealLightBaseIntensity = -1f;
         private float revealLightBaseRange = -1f;
+        private double probeHoldEndsAt;
 
         public MonsterState CurrentState => currentState;
 
@@ -199,6 +207,10 @@ namespace AsylumHorror.Monster
             lastTimeSawTarget = 0;
             nextSearchPointAt = 0;
             attackResolveAt = 0;
+            investigateListenEndsAt = 0;
+            searchListenEndsAt = 0;
+            probeHoldEndsAt = 0;
+            memory.Reset(transform.position);
 
             if (roundStartPoint != null)
             {
@@ -262,9 +274,8 @@ namespace AsylumHorror.Monster
             ConfigureAgent(patrolSpeed, false);
             RefreshTravelProgress();
 
-            if (TryFindVisiblePlayer(out NetworkPlayerStatus visiblePlayer))
+            if (TryReactToVisiblePlayer())
             {
-                BeginChase(visiblePlayer);
                 return;
             }
 
@@ -353,9 +364,8 @@ namespace AsylumHorror.Monster
             ConfigureAgent(investigateSpeed, false);
             RefreshTravelProgress();
 
-            if (TryFindVisiblePlayer(out NetworkPlayerStatus visiblePlayer))
+            if (TryReactToVisiblePlayer())
             {
-                BeginChase(visiblePlayer);
                 return;
             }
 
@@ -375,10 +385,28 @@ namespace AsylumHorror.Monster
                 nextPathRefreshAt = NetworkTime.time + pathRefreshInterval;
             }
 
-            bool reached = navMeshAgent.remainingDistance <= patrolStoppingDistance + 0.25f;
+            bool reached = navMeshAgent != null &&
+                           !navMeshAgent.pathPending &&
+                           (!navMeshAgent.hasPath || navMeshAgent.remainingDistance <= patrolStoppingDistance + 0.25f);
             bool timedOut = NetworkTime.time >= stateEndsAt;
+            if (reached)
+            {
+                if (investigateListenEndsAt <= 0d)
+                {
+                    investigateListenEndsAt = NetworkTime.time + GetRandomDuration(investigateListenRange);
+                }
+
+                if (NetworkTime.time < investigateListenEndsAt)
+                {
+                    ConfigureAgent(investigateSpeed * 0.72f, true);
+                    SweepIdleLook();
+                    return;
+                }
+            }
+
             if (reached || timedOut)
             {
+                investigateListenEndsAt = 0d;
                 BeginSuspicious(interestPoint);
             }
         }
@@ -386,12 +414,11 @@ namespace AsylumHorror.Monster
         [Server]
         private void TickSuspicious()
         {
-            ConfigureAgent(investigateSpeed * 0.75f, true);
-            transform.Rotate(Vector3.up, 55f * Time.deltaTime, Space.World);
+            ConfigureAgent(investigateSpeed * 0.78f, false);
+            RefreshTravelProgress();
 
-            if (TryFindVisiblePlayer(out NetworkPlayerStatus visiblePlayer))
+            if (TryReactToVisiblePlayer())
             {
-                BeginChase(visiblePlayer);
                 return;
             }
 
@@ -401,9 +428,21 @@ namespace AsylumHorror.Monster
                 return;
             }
 
+            Vector3 anchor = ResolveSearchAnchor(interestPoint == Vector3.zero ? transform.position : interestPoint);
+            if (memory.RemainingProbeCount <= 0)
+            {
+                RebuildSearchPlan(anchor, 4);
+            }
+
+            if (!TickSearchProbe(investigateSpeed * 0.78f, patrolStoppingDistance + 0.18f, idleSweepTurnSpeed * 1.85f))
+            {
+                BeginSearch(anchor);
+                return;
+            }
+
             if (NetworkTime.time >= stateEndsAt)
             {
-                BeginSearch(interestPoint);
+                BeginSearch(anchor);
             }
         }
 
@@ -413,9 +452,8 @@ namespace AsylumHorror.Monster
             ConfigureAgent(searchSpeed, false);
             RefreshTravelProgress();
 
-            if (TryFindVisiblePlayer(out NetworkPlayerStatus visiblePlayer))
+            if (TryReactToVisiblePlayer())
             {
-                BeginChase(visiblePlayer);
                 return;
             }
 
@@ -431,18 +469,28 @@ namespace AsylumHorror.Monster
                 return;
             }
 
-            bool shouldRefreshPoint = !navMeshAgent.hasPath ||
-                                      IsMovementStalled(patrolStoppingDistance + 0.9f) ||
-                                      navMeshAgent.remainingDistance <= patrolStoppingDistance + 0.1f ||
-                                      NetworkTime.time >= nextSearchPointAt;
-            if (!shouldRefreshPoint)
+            Vector3 anchor = ResolveSearchAnchor(interestPoint == Vector3.zero ? transform.position : interestPoint);
+            if (memory.RemainingProbeCount <= 0 && NetworkTime.time >= nextSearchPointAt)
             {
-                return;
+                RebuildSearchPlan(anchor);
+                nextSearchPointAt = NetworkTime.time + searchPointInterval;
             }
 
-            currentSearchPoint = FindSearchPointNear(interestPoint);
-            nextSearchPointAt = NetworkTime.time + searchPointInterval;
-            TrySetDestination(currentSearchPoint);
+            if (!TickSearchProbe(searchSpeed, patrolStoppingDistance + 0.24f, idleSweepTurnSpeed * 1.7f))
+            {
+                if (NetworkTime.time + 0.9f >= stateEndsAt)
+                {
+                    BeginCooldown();
+                    return;
+                }
+
+                RebuildSearchPlan(anchor);
+                nextSearchPointAt = NetworkTime.time + searchPointInterval;
+                if (!TickSearchProbe(searchSpeed, patrolStoppingDistance + 0.24f, idleSweepTurnSpeed * 1.7f))
+                {
+                    BeginCooldown();
+                }
+            }
         }
 
         [Server]
@@ -454,35 +502,57 @@ namespace AsylumHorror.Monster
             NetworkPlayerStatus target = ResolveChaseTarget();
             if (target == null || !target.IsMonsterTargetable)
             {
-                BeginSearch(lastKnownTargetPosition == Vector3.zero ? transform.position : lastKnownTargetPosition);
+                BeginSearch(ResolveSearchAnchor(lastKnownTargetPosition == Vector3.zero ? transform.position : lastKnownTargetPosition));
                 return;
-            }
-
-            if (!navMeshAgent.hasPath ||
-                IsMovementStalled(attackRange + 1.4f) ||
-                NetworkTime.time >= nextPathRefreshAt)
-            {
-                TrySetDestination(target.transform.position);
-                nextPathRefreshAt = NetworkTime.time + pathRefreshInterval;
             }
 
             bool visibleNow = CanSeePlayer(target);
             if (visibleNow)
             {
-                lastTimeSawTarget = NetworkTime.time;
-                lastKnownTargetPosition = target.transform.position;
-                interestPoint = lastKnownTargetPosition;
+                Vector3 observedPoint = BuildObservedPoint(target);
+                RememberVisibleTarget(target, observedPoint);
+
+                Vector3 pressurePoint = BuildChasePressurePoint(target, true);
+                float destinationDelta = Vector3.Distance(pressurePoint, interestPoint);
+                if (!navMeshAgent.hasPath ||
+                    IsMovementStalled(attackRange + 1.4f) ||
+                    NetworkTime.time >= nextPathRefreshAt ||
+                    destinationDelta >= 1.1f)
+                {
+                    interestPoint = pressurePoint;
+                    TrySetDestination(pressurePoint);
+                    nextPathRefreshAt = NetworkTime.time + pathRefreshInterval * 0.68f;
+                }
             }
-            else if (NetworkTime.time - lastTimeSawTarget > lostTargetAfterSeconds)
+            else
             {
-                BeginSearch(lastKnownTargetPosition);
-                return;
+                Vector3 pressurePoint = BuildChasePressurePoint(target, false);
+                if (!navMeshAgent.hasPath ||
+                    IsMovementStalled(attackRange + 1.4f) ||
+                    NetworkTime.time >= nextPathRefreshAt ||
+                    Vector3.Distance(pressurePoint, interestPoint) >= 0.95f)
+                {
+                    interestPoint = pressurePoint;
+                    TrySetDestination(pressurePoint);
+                    nextPathRefreshAt = NetworkTime.time + pathRefreshInterval * 0.62f;
+                }
             }
 
             float distance = Vector3.Distance(transform.position, target.transform.position);
+            double unseenDuration = NetworkTime.time - lastTimeSawTarget;
+            if (!visibleNow && unseenDuration > lostTargetAfterSeconds * 0.48f)
+            {
+                Vector3 pressurePoint = BuildChasePressurePoint(target, false);
+                if (distance > 7.8f || unseenDuration > lostTargetAfterSeconds * 0.76f)
+                {
+                    BeginSuspicious(pressurePoint);
+                    return;
+                }
+            }
+
             if (NetworkTime.time - chaseStartedAt >= maxChaseDuration && (!visibleNow || distance >= 10f))
             {
-                BeginSearch(lastKnownTargetPosition == Vector3.zero ? transform.position : lastKnownTargetPosition);
+                BeginSearch(ResolveSearchAnchor(lastKnownTargetPosition == Vector3.zero ? transform.position : lastKnownTargetPosition));
                 return;
             }
 
@@ -540,9 +610,8 @@ namespace AsylumHorror.Monster
         {
             ConfigureAgent(patrolSpeed * 0.85f, false);
 
-            if (TryFindVisiblePlayer(out NetworkPlayerStatus visiblePlayer))
+            if (TryReactToVisiblePlayer())
             {
-                BeginChase(visiblePlayer);
                 return;
             }
 
@@ -685,9 +754,7 @@ namespace AsylumHorror.Monster
             bool changedTarget = chaseTargetNetId != target.netId || currentState != MonsterState.Chase;
             chaseTargetNetId = target.netId;
             attackTargetNetId = 0;
-            lastTimeSawTarget = NetworkTime.time;
-            lastKnownTargetPosition = target.transform.position;
-            interestPoint = lastKnownTargetPosition;
+            RememberVisibleTarget(target, BuildObservedPoint(target));
             if (changedTarget)
             {
                 chaseStartedAt = NetworkTime.time;
@@ -702,6 +769,8 @@ namespace AsylumHorror.Monster
             attackTargetNetId = 0;
             interestPoint = worldPoint;
             stateEndsAt = NetworkTime.time + investigateTimeout;
+            investigateListenEndsAt = 0d;
+            probeHoldEndsAt = 0d;
             TrySetDestination(interestPoint);
             SetState(MonsterState.InvestigateSound);
         }
@@ -711,8 +780,11 @@ namespace AsylumHorror.Monster
         {
             chaseTargetNetId = 0;
             attackTargetNetId = 0;
-            interestPoint = worldPoint;
+            interestPoint = ResolveSearchAnchor(worldPoint);
             stateEndsAt = NetworkTime.time + suspiciousDuration;
+            searchListenEndsAt = 0d;
+            probeHoldEndsAt = 0d;
+            RebuildSearchPlan(interestPoint, 4);
             SetState(MonsterState.Suspicious);
         }
 
@@ -721,11 +793,12 @@ namespace AsylumHorror.Monster
         {
             chaseTargetNetId = 0;
             attackTargetNetId = 0;
-            interestPoint = centerPoint;
+            interestPoint = ResolveSearchAnchor(centerPoint);
             stateEndsAt = NetworkTime.time + searchDuration;
-            currentSearchPoint = FindSearchPointNear(centerPoint);
-            nextSearchPointAt = NetworkTime.time + searchPointInterval;
-            TrySetDestination(currentSearchPoint);
+            searchListenEndsAt = 0d;
+            probeHoldEndsAt = 0d;
+            nextSearchPointAt = 0d;
+            RebuildSearchPlan(interestPoint);
             SetState(MonsterState.Search);
         }
 
@@ -821,6 +894,14 @@ namespace AsylumHorror.Monster
             nextPathRefreshAt = 0;
             lastTravelProgressAt = NetworkTime.time;
             lastTravelProgressPosition = transform.position;
+            investigateListenEndsAt = 0d;
+            searchListenEndsAt = 0d;
+            probeHoldEndsAt = 0d;
+
+            if (nextState != MonsterState.Suspicious && nextState != MonsterState.Search)
+            {
+                memory.ClearSearchPlan();
+            }
 
             if (previousState != MonsterState.Chase && nextState == MonsterState.Chase)
             {
@@ -831,6 +912,390 @@ namespace AsylumHorror.Monster
             {
                 stateEndsAt = 0d;
             }
+        }
+
+        [Server]
+        private bool TryReactToVisiblePlayer()
+        {
+            if (!TryFindVisiblePlayer(out NetworkPlayerStatus visiblePlayer))
+            {
+                return false;
+            }
+
+            Vector3 observedPoint = BuildObservedPoint(visiblePlayer);
+            RememberVisibleTarget(visiblePlayer, observedPoint);
+
+            if (ShouldCommitToChase(visiblePlayer))
+            {
+                BeginChase(visiblePlayer);
+            }
+            else
+            {
+                RefreshInvestigateFromSight(observedPoint);
+            }
+
+            return true;
+        }
+
+        [Server]
+        private bool ShouldCommitToChase(NetworkPlayerStatus player)
+        {
+            if (player == null)
+            {
+                return false;
+            }
+
+            float distance = Vector3.Distance(transform.position, player.transform.position);
+            if (distance <= directCommitDistance)
+            {
+                return true;
+            }
+
+            bool alreadyAlerted = currentState == MonsterState.InvestigateSound ||
+                                  currentState == MonsterState.Suspicious ||
+                                  currentState == MonsterState.Search;
+            if (alreadyAlerted && distance <= alertedCommitDistance)
+            {
+                return true;
+            }
+
+            NetworkPlayerController controller = player.GetComponent<NetworkPlayerController>();
+            PlayerFlashlight flashlight = player.GetComponent<PlayerFlashlight>();
+            bool running = controller != null && controller.LocomotionState == PlayerLocomotionState.Run;
+            bool lit = flashlight != null && flashlight.IsOn;
+            bool compromised = player.Condition == PlayerCondition.Injured || player.HasRescueTrauma;
+
+            return (running || lit || compromised) &&
+                   distance <= Mathf.Max(directCommitDistance + 2.8f, viewDistance * 0.72f);
+        }
+
+        [Server]
+        private Vector3 BuildObservedPoint(NetworkPlayerStatus player)
+        {
+            Vector3 point = player.transform.position;
+            if (player.TryGetComponent(out CharacterController characterController))
+            {
+                Vector3 velocity = Vector3.ProjectOnPlane(characterController.velocity, Vector3.up);
+                point += velocity * 0.14f;
+            }
+
+            point.y = transform.position.y;
+            return point;
+        }
+
+        [Server]
+        private void RememberVisibleTarget(NetworkPlayerStatus target, Vector3 observedPoint)
+        {
+            Vector3 targetVelocity = Vector3.zero;
+            if (target != null && target.TryGetComponent(out CharacterController characterController))
+            {
+                targetVelocity = characterController.velocity;
+            }
+
+            memory.RememberSight(transform.position, observedPoint, targetVelocity, NetworkTime.time);
+            lastTimeSawTarget = NetworkTime.time;
+            lastKnownTargetPosition = observedPoint;
+            interestPoint = observedPoint;
+        }
+
+        [Server]
+        private void RefreshInvestigateFromSight(Vector3 observedPoint)
+        {
+            interestPoint = observedPoint;
+
+            switch (currentState)
+            {
+                case MonsterState.InvestigateSound:
+                    stateEndsAt = Math.Max(stateEndsAt, NetworkTime.time + investigateTimeout * 0.6f);
+                    nextPathRefreshAt = 0d;
+                    break;
+                case MonsterState.Suspicious:
+                    RebuildSearchPlan(observedPoint, 4);
+                    stateEndsAt = NetworkTime.time + suspiciousDuration;
+                    nextPathRefreshAt = 0d;
+                    break;
+                case MonsterState.Search:
+                    RebuildSearchPlan(observedPoint, 6);
+                    stateEndsAt = Math.Max(stateEndsAt, NetworkTime.time + searchDuration * 0.4f);
+                    nextPathRefreshAt = 0d;
+                    break;
+                default:
+                    BeginInvestigate(observedPoint);
+                    break;
+            }
+        }
+
+        [Server]
+        private Vector3 ResolveSearchAnchor(Vector3 fallback)
+        {
+            Vector3 safeFallback = fallback == Vector3.zero ? transform.position : fallback;
+            Vector3 anchor = memory.ResolveAnchor(safeFallback, NetworkTime.time, lostTargetAfterSeconds * 1.85f, noiseMemorySeconds);
+            anchor.y = transform.position.y;
+            return anchor;
+        }
+
+        [Server]
+        private Vector3 BuildChasePressurePoint(NetworkPlayerStatus target, bool visibleNow)
+        {
+            Vector3 anchor = visibleNow ? BuildObservedPoint(target) : ResolveSearchAnchor(lastKnownTargetPosition);
+            Vector3 preferredDirection = memory.ResolveDirection(transform.forward);
+            Vector3 targetVelocity = Vector3.zero;
+            if (target != null && target.TryGetComponent(out CharacterController characterController))
+            {
+                targetVelocity = Vector3.ProjectOnPlane(characterController.velocity, Vector3.up);
+                if (targetVelocity.sqrMagnitude > 0.09f)
+                {
+                    preferredDirection = targetVelocity.normalized;
+                }
+            }
+
+            float leadDistance = visibleNow ? 1.35f : 2.9f;
+            if (targetVelocity.sqrMagnitude > 0.09f)
+            {
+                leadDistance += Mathf.Clamp(targetVelocity.magnitude * (visibleNow ? 0.22f : 0.35f), 0.18f, 1.4f);
+            }
+
+            if (Vector3.Distance(transform.position, anchor) <= attackRange + 1.6f)
+            {
+                return anchor;
+            }
+
+            Vector3 predictedPoint = anchor + preferredDirection * leadDistance;
+            if (TryGetPreferredDoorwayPoint(anchor, preferredDirection, out Vector3 doorwayPoint))
+            {
+                float doorwayBias = Vector3.Distance(doorwayPoint, predictedPoint);
+                if (!visibleNow || doorwayBias <= 3.2f)
+                {
+                    predictedPoint = doorwayPoint;
+                }
+            }
+
+            if (NavMesh.SamplePosition(predictedPoint, out NavMeshHit hit, 2.6f, NavMesh.AllAreas))
+            {
+                predictedPoint = hit.position;
+            }
+
+            predictedPoint.y = transform.position.y;
+            return predictedPoint;
+        }
+
+        [Server]
+        private void RebuildSearchPlan(Vector3 anchor, int maxProbeCount = 0)
+        {
+            Vector3 preferredDirection = memory.ResolveDirection(transform.forward);
+            List<Vector3> doorwayPoints = new List<Vector3>(6);
+            List<Vector3> patrolSearchPoints = new List<Vector3>(4);
+            CollectDoorwaySearchPoints(anchor, preferredDirection, doorwayPoints, 4);
+            CollectNearbyPatrolPoints(anchor, preferredDirection, patrolSearchPoints, 3);
+
+            List<MonsterSearchProbe> rawPlan = MonsterSearchPlanner.BuildPlan(
+                transform.position,
+                anchor,
+                preferredDirection,
+                doorwayPoints,
+                patrolSearchPoints,
+                searchRadius);
+
+            List<MonsterSearchProbe> validatedPlan = new List<MonsterSearchProbe>(rawPlan.Count);
+            for (int index = 0; index < rawPlan.Count; index++)
+            {
+                MonsterSearchProbe rawProbe = rawPlan[index];
+                if (!TryValidateProbe(rawProbe, out MonsterSearchProbe resolvedProbe))
+                {
+                    continue;
+                }
+
+                validatedPlan.Add(resolvedProbe);
+                if (maxProbeCount > 0 && validatedPlan.Count >= maxProbeCount)
+                {
+                    break;
+                }
+            }
+
+            memory.SetSearchPlan(validatedPlan);
+            probeHoldEndsAt = 0d;
+            currentSearchPoint = anchor;
+        }
+
+        [Server]
+        private bool TryValidateProbe(MonsterSearchProbe probe, out MonsterSearchProbe resolvedProbe)
+        {
+            resolvedProbe = default;
+            if (!NavMesh.SamplePosition(probe.Position, out NavMeshHit positionHit, 2.4f, NavMesh.AllAreas))
+            {
+                return false;
+            }
+
+            Vector3 focusPoint = probe.FocusPoint;
+            if (NavMesh.SamplePosition(probe.FocusPoint, out NavMeshHit focusHit, 2.8f, NavMesh.AllAreas))
+            {
+                focusPoint = focusHit.position;
+            }
+
+            resolvedProbe = new MonsterSearchProbe(positionHit.position, focusPoint, probe.Type, probe.DwellSeconds);
+            return true;
+        }
+
+        [Server]
+        private void CollectDoorwaySearchPoints(Vector3 anchor, Vector3 preferredDirection, List<Vector3> doorwayPoints, int maxCount)
+        {
+            if (doorwayPoints == null || maxCount <= 0)
+            {
+                return;
+            }
+
+            Collider[] colliders = Physics.OverlapSphere(
+                anchor + Vector3.up,
+                searchRadius + 3.1f,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Collide);
+
+            Vector3 predictedEscape = memory.PredictEscapePoint(3.2f);
+            List<KeyValuePair<float, Vector3>> scored = new List<KeyValuePair<float, Vector3>>();
+            HashSet<NetworkDoor> seenDoors = new HashSet<NetworkDoor>();
+
+            foreach (Collider collider in colliders)
+            {
+                if (collider == null)
+                {
+                    continue;
+                }
+
+                NetworkDoor door = collider.GetComponentInParent<NetworkDoor>();
+                if (door == null || !seenDoors.Add(door) || !TrySampleDoorSearchPoint(door, anchor, out Vector3 candidate))
+                {
+                    continue;
+                }
+
+                Vector3 toCandidate = Vector3.ProjectOnPlane(candidate - anchor, Vector3.up);
+                if (toCandidate.sqrMagnitude <= 0.01f)
+                {
+                    continue;
+                }
+
+                float angle = Vector3.Angle(preferredDirection, toCandidate.normalized);
+                float distance = toCandidate.magnitude;
+                float escapeBias = Vector3.Distance(candidate, predictedEscape);
+                float score = distance * 0.62f + angle * 0.032f + escapeBias * 0.18f;
+                scored.Add(new KeyValuePair<float, Vector3>(score, candidate));
+            }
+
+            foreach (KeyValuePair<float, Vector3> entry in scored.OrderBy(item => item.Key).Take(maxCount))
+            {
+                doorwayPoints.Add(entry.Value);
+            }
+        }
+
+        [Server]
+        private void CollectNearbyPatrolPoints(Vector3 anchor, Vector3 preferredDirection, List<Vector3> patrolSearchPoints, int maxCount)
+        {
+            if (patrolSearchPoints == null || patrolPoints == null || patrolPoints.Length == 0 || maxCount <= 0)
+            {
+                return;
+            }
+
+            List<KeyValuePair<float, Vector3>> scored = new List<KeyValuePair<float, Vector3>>();
+            foreach (PatrolPoint patrolPoint in patrolPoints)
+            {
+                if (patrolPoint == null)
+                {
+                    continue;
+                }
+
+                Vector3 candidate = patrolPoint.transform.position;
+                Vector3 toCandidate = Vector3.ProjectOnPlane(candidate - anchor, Vector3.up);
+                float directDistance = toCandidate.magnitude;
+                if (directDistance > searchRadius * 1.75f)
+                {
+                    continue;
+                }
+
+                float pathDistance = directDistance;
+                if (TryEstimatePathDistance(candidate, out float measuredPath))
+                {
+                    pathDistance = measuredPath;
+                }
+
+                float angle = toCandidate.sqrMagnitude > 0.01f
+                    ? Vector3.Angle(preferredDirection, toCandidate.normalized)
+                    : 0f;
+                float score = pathDistance * 0.7f + angle * 0.028f;
+                scored.Add(new KeyValuePair<float, Vector3>(score, candidate));
+            }
+
+            foreach (KeyValuePair<float, Vector3> entry in scored.OrderBy(item => item.Key).Take(maxCount))
+            {
+                patrolSearchPoints.Add(entry.Value);
+            }
+        }
+
+        [Server]
+        private bool TryGetPreferredDoorwayPoint(Vector3 anchor, Vector3 preferredDirection, out Vector3 doorwayPoint)
+        {
+            List<Vector3> doorwayPoints = new List<Vector3>(2);
+            CollectDoorwaySearchPoints(anchor, preferredDirection, doorwayPoints, 1);
+            if (doorwayPoints.Count <= 0)
+            {
+                doorwayPoint = Vector3.zero;
+                return false;
+            }
+
+            doorwayPoint = doorwayPoints[0];
+            return true;
+        }
+
+        [Server]
+        private bool TickSearchProbe(float moveSpeed, float reachDistance, float turnSpeed)
+        {
+            if (!memory.TryGetCurrentProbe(out MonsterSearchProbe probe))
+            {
+                return false;
+            }
+
+            if (navMeshAgent == null)
+            {
+                return false;
+            }
+
+            bool reached = Vector3.Distance(transform.position, probe.Position) <= reachDistance ||
+                           (navMeshAgent != null &&
+                            !navMeshAgent.pathPending &&
+                            (!navMeshAgent.hasPath || navMeshAgent.remainingDistance <= reachDistance));
+
+            if (!reached)
+            {
+                bool needsDestination = !navMeshAgent.hasPath ||
+                                        IsMovementStalled(reachDistance + 0.75f) ||
+                                        NetworkTime.time >= nextPathRefreshAt ||
+                                        Vector3.Distance(currentSearchPoint, probe.Position) >= 0.65f;
+                if (needsDestination)
+                {
+                    currentSearchPoint = probe.Position;
+                    interestPoint = probe.Position;
+                    TrySetDestination(probe.Position);
+                    nextPathRefreshAt = NetworkTime.time + pathRefreshInterval * 0.78f;
+                }
+
+                LookToward(probe.FocusPoint, turnSpeed);
+                return true;
+            }
+
+            if (probeHoldEndsAt <= 0d)
+            {
+                probeHoldEndsAt = NetworkTime.time + probe.DwellSeconds;
+            }
+
+            if (NetworkTime.time < probeHoldEndsAt)
+            {
+                ConfigureAgent(moveSpeed * 0.7f, true);
+                LookToward(probe.FocusPoint, turnSpeed);
+                return true;
+            }
+
+            probeHoldEndsAt = 0d;
+            memory.AdvanceProbe();
+            nextPathRefreshAt = 0d;
+            return memory.RemainingProbeCount > 0;
         }
 
         private Vector3 ResolveDoorFocusPoint()
@@ -883,7 +1348,6 @@ namespace AsylumHorror.Monster
         private bool TryHandleNearbyDoor(Vector3 focusPoint)
         {
             if (currentState == MonsterState.Attack ||
-                currentState == MonsterState.Suspicious ||
                 NetworkTime.time < nextDoorOpenAt)
             {
                 return false;
@@ -1209,6 +1673,8 @@ namespace AsylumHorror.Monster
             {
                 return;
             }
+
+            memory.RememberNoise(noiseEvent);
 
             if (!bufferedNoise.HasValue)
             {
@@ -1566,6 +2032,16 @@ namespace AsylumHorror.Monster
         [Server]
         private Vector3 FindSearchPointNear(Vector3 centerPoint)
         {
+            if (TryFindDoorwaySearchPoint(centerPoint, out Vector3 doorwayPoint))
+            {
+                return doorwayPoint;
+            }
+
+            if (TryFindPatrolSearchPoint(centerPoint, out Vector3 patrolPoint))
+            {
+                return patrolPoint;
+            }
+
             for (int attempt = 0; attempt < 6; attempt++)
             {
                 Vector2 randomCircle = UnityEngine.Random.insideUnitCircle * searchRadius;
@@ -1577,6 +2053,128 @@ namespace AsylumHorror.Monster
             }
 
             return centerPoint;
+        }
+
+        [Server]
+        private bool TryFindDoorwaySearchPoint(Vector3 centerPoint, out Vector3 searchPoint)
+        {
+            searchPoint = Vector3.zero;
+            Collider[] colliders = Physics.OverlapSphere(
+                centerPoint + Vector3.up,
+                searchRadius + 2.5f,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Collide);
+            NetworkDoor bestDoor = null;
+            float bestScore = float.MaxValue;
+            HashSet<NetworkDoor> seenDoors = new HashSet<NetworkDoor>();
+
+            foreach (Collider collider in colliders)
+            {
+                if (collider == null)
+                {
+                    continue;
+                }
+
+                NetworkDoor door = collider.GetComponentInParent<NetworkDoor>();
+                if (door == null || !seenDoors.Add(door))
+                {
+                    continue;
+                }
+
+                float distance = Vector3.Distance(centerPoint, door.transform.position);
+                if (distance > searchRadius + 2.5f || !TrySampleDoorSearchPoint(door, centerPoint, out Vector3 candidate))
+                {
+                    continue;
+                }
+
+                if (distance < bestScore)
+                {
+                    bestScore = distance;
+                    bestDoor = door;
+                    searchPoint = candidate;
+                }
+            }
+
+            return bestDoor != null;
+        }
+
+        [Server]
+        private bool TryFindPatrolSearchPoint(Vector3 centerPoint, out Vector3 searchPoint)
+        {
+            searchPoint = Vector3.zero;
+            PatrolPoint bestPoint = null;
+            float bestDistance = float.MaxValue;
+            foreach (PatrolPoint patrolPoint in patrolPoints)
+            {
+                if (patrolPoint == null)
+                {
+                    continue;
+                }
+
+                float distance = Vector3.Distance(centerPoint, patrolPoint.transform.position);
+                if (distance > searchRadius * 1.45f || distance >= bestDistance)
+                {
+                    continue;
+                }
+
+                bestDistance = distance;
+                bestPoint = patrolPoint;
+            }
+
+            if (bestPoint == null)
+            {
+                return false;
+            }
+
+            searchPoint = bestPoint.transform.position;
+            return true;
+        }
+
+        [Server]
+        private bool TrySampleDoorSearchPoint(NetworkDoor door, Vector3 referencePoint, out Vector3 searchPoint)
+        {
+            searchPoint = Vector3.zero;
+            if (door == null)
+            {
+                return false;
+            }
+
+            Vector3[] candidates =
+            {
+                door.transform.position + door.transform.forward * 1.55f,
+                door.transform.position - door.transform.forward * 1.55f,
+                door.transform.position + door.transform.right * 1.2f,
+                door.transform.position - door.transform.right * 1.2f
+            };
+
+            float bestScore = float.MaxValue;
+            bool found = false;
+            foreach (Vector3 candidate in candidates)
+            {
+                if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, 1.8f, NavMesh.AllAreas))
+                {
+                    continue;
+                }
+
+                float score = Vector3.Distance(referencePoint, hit.position);
+                if (score >= bestScore)
+                {
+                    continue;
+                }
+
+                bestScore = score;
+                searchPoint = hit.position;
+                found = true;
+            }
+
+            return found;
+        }
+
+        private static float GetRandomDuration(Vector2 range)
+        {
+            float min = Mathf.Min(range.x, range.y);
+            float max = Mathf.Max(range.x, range.y);
+            return UnityEngine.Random.Range(min, max);
         }
 
         [Server]
@@ -1690,6 +2288,15 @@ namespace AsylumHorror.Monster
             }
 
             bool hasRecentNoise = TryGetRecentNoise(sensePulseNoiseWindow, out NoiseEvent recentNoise);
+            bool trackingState = currentState == MonsterState.InvestigateSound ||
+                                 currentState == MonsterState.Suspicious ||
+                                 currentState == MonsterState.Search;
+            if (!hasRecentNoise && !trackingState)
+            {
+                nextSensePulseAt = NetworkTime.time + huntingSenseCooldown * UnityEngine.Random.Range(0.94f, 1.22f);
+                return;
+            }
+
             NetworkPlayerStatus sensedTarget = null;
             float bestScore = float.MaxValue;
 
@@ -1738,6 +2345,7 @@ namespace AsylumHorror.Monster
             {
                 if (hasRecentNoise && recentNoise.Priority >= 1.35f)
                 {
+                    memory.RememberNoise(recentNoise);
                     lastKnownTargetPosition = recentNoise.Position;
                     BeginInvestigate(recentNoise.Position);
                 }
@@ -1753,6 +2361,12 @@ namespace AsylumHorror.Monster
                 probePoint += characterController.velocity * (useNoiseLead ? 0.08f : 0.14f);
             }
 
+            memory.RememberNoise(new NoiseEvent(
+                probePoint,
+                Mathf.Max(3.5f, huntingSenseRadius * 0.45f),
+                useNoiseLead ? 1.2f : 1.45f,
+                NoiseCategory.PlayerMovement,
+                NetworkTime.time));
             lastKnownTargetPosition = probePoint;
             BeginInvestigate(probePoint);
         }

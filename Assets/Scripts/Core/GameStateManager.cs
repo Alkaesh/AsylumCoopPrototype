@@ -325,11 +325,11 @@ namespace AsylumHorror.Core
         {
             return CurrentObjectivePhase switch
             {
-                RoundObjectivePhase.RestoreAuxiliaryPower => "Directive: Restart auxiliary power",
-                RoundObjectivePhase.FindAccessKey => "Directive: Find staff clearance",
-                RoundObjectivePhase.RestoreMainPower => "Directive: Route power to the main lock",
-                RoundObjectivePhase.Escape => "Directive: Get someone to the front breach",
-                _ => "Directive: Stay alive"
+                RoundObjectivePhase.RestoreAuxiliaryPower => "Wake the auxiliary breakers",
+                RoundObjectivePhase.FindAccessKey => "Find the last usable clearance card",
+                RoundObjectivePhase.RestoreMainPower => "Route power into the final lock",
+                RoundObjectivePhase.Escape => "Get someone back to the breach",
+                _ => "Keep moving"
             };
         }
 
@@ -337,11 +337,11 @@ namespace AsylumHorror.Core
         {
             return CurrentObjectivePhase switch
             {
-                RoundObjectivePhase.RestoreAuxiliaryPower => $"Clue: {ResolveRouteStartClue()}",
-                RoundObjectivePhase.FindAccessKey => $"Clue: {ResolveKeycardClue()}",
-                RoundObjectivePhase.RestoreMainPower => $"Clue: {ResolvePowerClue()}",
-                RoundObjectivePhase.Escape => "Clue: The route back north is open, but no space stays safe for long",
-                _ => "Clue: Listen before you move"
+                RoundObjectivePhase.RestoreAuxiliaryPower => ResolveRouteStartClue(),
+                RoundObjectivePhase.FindAccessKey => ResolveKeycardClue(),
+                RoundObjectivePhase.RestoreMainPower => ResolvePowerClue(),
+                RoundObjectivePhase.Escape => "The way north is open now, but it will not stay quiet",
+                _ => "Listen before you move"
             };
         }
 
@@ -350,9 +350,9 @@ namespace AsylumHorror.Core
             return CurrentObjectivePhase switch
             {
                 RoundObjectivePhase.RestoreAuxiliaryPower => BuildGeneratorPressureLine(),
-                RoundObjectivePhase.FindAccessKey => "Keep noise low. Closed sections still want the card.",
-                RoundObjectivePhase.RestoreMainPower => "The final lock is still dead.",
-                RoundObjectivePhase.Escape => "The breach is open. Moving first matters more than moving fast.",
+                RoundObjectivePhase.FindAccessKey => "Noise carries farther once the doors know you are here.",
+                RoundObjectivePhase.RestoreMainPower => "The deeper relay is still dark.",
+                RoundObjectivePhase.Escape => "The breach is open. Fast is loud.",
                 _ => string.Empty
             };
         }
@@ -362,7 +362,7 @@ namespace AsylumHorror.Core
             int remaining = Mathf.Max(0, requiredGenerators - generatorsCompleted);
             return remaining switch
             {
-                0 => "Auxiliary breakers are holding. The deeper lock can wake now.",
+                0 => "The first breakers are holding. The deeper lock can wake now.",
                 1 => "One more breaker has to hold.",
                 _ => "Most of the wing is still dead."
             };
@@ -372,10 +372,10 @@ namespace AsylumHorror.Core
         {
             return activeRouteKind switch
             {
-                RoundRouteKind.WestDescent => "Take the west offices and records wing first",
-                RoundRouteKind.EastDescent => "Push through the east wards and operating wing",
-                RoundRouteKind.CrossCurrent => "Split the central hall and wake both mid wings",
-                _ => "Feel out the nearest live corridor"
+                RoundRouteKind.WestDescent => "The west offices still hum behind the records wing",
+                RoundRouteKind.EastDescent => "The east wards still breathe around surgery",
+                RoundRouteKind.CrossCurrent => "The central corridor splits into two half-lit wings",
+                _ => "The nearest live corridor will tell you where to go"
             };
         }
 
@@ -383,10 +383,10 @@ namespace AsylumHorror.Core
         {
             return activeRouteKind switch
             {
-                RoundRouteKind.WestDescent => "Security clearance was abandoned somewhere along the west route",
-                RoundRouteKind.EastDescent => "Look for clearance along the east medical offices",
-                RoundRouteKind.CrossCurrent => "The master card should still be near the front watch post",
-                _ => "The card was not left far from the staffed wing"
+                RoundRouteKind.WestDescent => "Clearance was left somewhere along the west staff route",
+                RoundRouteKind.EastDescent => "Medical staff kept the card near the east offices",
+                RoundRouteKind.CrossCurrent => "The front watch post never fully emptied out",
+                _ => "The card will be close to the last staffed rooms"
             };
         }
 
@@ -394,10 +394,10 @@ namespace AsylumHorror.Core
         {
             return activeRouteKind switch
             {
-                RoundRouteKind.WestDescent => "Follow the west service lines to the breaker cage",
-                RoundRouteKind.EastDescent => "The east maintenance switchboard still has life in it",
-                RoundRouteKind.CrossCurrent => "The central relay sits past the southern cross-corridor",
-                _ => "The final relay is deeper than the first locks"
+                RoundRouteKind.WestDescent => "The west service lines still reach a deeper breaker cage",
+                RoundRouteKind.EastDescent => "The east maintenance board still carries a pulse",
+                RoundRouteKind.CrossCurrent => "The central relay waits past the southern cross-corridor",
+                _ => "The final relay sits deeper than the first lock"
             };
         }
     }

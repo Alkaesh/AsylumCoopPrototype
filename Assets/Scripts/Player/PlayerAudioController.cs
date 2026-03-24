@@ -153,7 +153,7 @@ namespace AsylumHorror.Player
                                                   (playerStatus != null ? playerStatus.BreathingLoudnessMultiplier : 1f));
             float chaseVolume = monster != null &&
                                 (monster.CurrentState == MonsterState.Chase || monster.CurrentState == MonsterState.Attack)
-                ? Mathf.Clamp01(Mathf.Max(chase01 * 0.48f, stress01 * 0.22f))
+                ? Mathf.Clamp01(Mathf.Max(chase01 * 0.16f, stress01 * 0.08f))
                 : 0f;
 
             SetFearVolumes(heartbeatVolume, breathingVolume, chaseVolume);

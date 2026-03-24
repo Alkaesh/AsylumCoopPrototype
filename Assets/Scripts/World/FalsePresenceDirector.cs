@@ -35,6 +35,7 @@ namespace AsylumHorror.World
         private MonsterAI monster;
         private float nextEventAt;
         private float lastDangerAt = -999f;
+        private float lastVisualEventAt = -999f;
         private FalsePresenceAnchor lastAnchor;
         private Camera localCamera;
 
@@ -165,6 +166,11 @@ namespace AsylumHorror.World
                     continue;
                 }
 
+                if (IsVisualEvent(anchor.EventType) && Time.time - lastVisualEventAt < 34f)
+                {
+                    continue;
+                }
+
                 if (!HasPresentationLine(anchor))
                 {
                     continue;
@@ -196,6 +202,11 @@ namespace AsylumHorror.World
 
         private void TriggerAnchor(FalsePresenceAnchor anchor)
         {
+            if (IsVisualEvent(anchor.EventType))
+            {
+                lastVisualEventAt = Time.time;
+            }
+
             switch (anchor.EventType)
             {
                 case FalsePresenceEventType.DistantFootsteps:
@@ -225,6 +236,10 @@ namespace AsylumHorror.World
 
         private IEnumerator PlayFlashSilhouette(Transform anchor, float duration, Light linkedLight)
         {
+            yield return new WaitForSeconds(Random.Range(0.08f, 0.18f));
+            PlayOneShotAt(anchor.position + anchor.forward * 0.4f, metallicPresenceClips, hideoutNoiseVolume * 0.42f);
+            yield return new WaitForSeconds(Random.Range(0.08f, 0.16f));
+
             GameObject silhouette = BossApparitionFactory.Create(anchor.position, anchor.rotation, BossApparitionStyle.FlashReveal);
             if (silhouette == null)
             {
@@ -240,6 +255,9 @@ namespace AsylumHorror.World
 
         private IEnumerator PlayDoorwayShadow(Transform anchor, Transform target)
         {
+            PlayOneShotAt(anchor.position, distantFootstepClips, falseStepVolume * 0.45f);
+            yield return new WaitForSeconds(Random.Range(0.12f, 0.24f));
+
             GameObject silhouette = BossApparitionFactory.Create(anchor.position, anchor.rotation, BossApparitionStyle.DoorwayShadow);
             if (silhouette == null)
             {
@@ -490,6 +508,12 @@ namespace AsylumHorror.World
             }
 
             return false;
+        }
+
+        private static bool IsVisualEvent(FalsePresenceEventType eventType)
+        {
+            return eventType == FalsePresenceEventType.FlashSilhouette ||
+                   eventType == FalsePresenceEventType.DoorwayShadow;
         }
 
         private static NetworkPlayerController FindLocalPlayer()

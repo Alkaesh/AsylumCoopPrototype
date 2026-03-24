@@ -35,7 +35,7 @@ namespace AsylumHorror.Player
                 return string.Empty;
             }
 
-            return "Hold E: Revive Teammate";
+            return "Hold E: Pull them up";
         }
 
         [Server]

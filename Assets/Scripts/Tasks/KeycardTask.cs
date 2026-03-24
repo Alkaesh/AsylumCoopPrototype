@@ -31,7 +31,7 @@ namespace AsylumHorror.Tasks
 
         public override string GetPrompt(NetworkPlayerStatus player)
         {
-            return collected ? "Keycard Collected" : "Hold E: Take Keycard";
+            return collected ? string.Empty : "Hold E: Take clearance";
         }
 
         [Server]

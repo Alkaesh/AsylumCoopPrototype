@@ -171,6 +171,10 @@ MonoBehaviour:
   carrySpeed: 3.1
   patrolStoppingDistance: 0.9
   patrolPauseRange: {x: 0.9, y: 2}
+  investigateListenRange: {x: 0.45, y: 1}
+  searchListenRange: {x: 0.55, y: 1.2}
+  directCommitDistance: 5.1
+  alertedCommitDistance: 10.6
   investigateTimeout: 7
   suspiciousDuration: 3.2
   searchDuration: 8

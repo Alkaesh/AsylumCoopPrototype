@@ -92,6 +92,7 @@ namespace AsylumHorror.UI
             if (interactionText != null)
             {
                 interactionText.text = prompt;
+                interactionText.gameObject.SetActive(!string.IsNullOrWhiteSpace(prompt));
             }
 
             if (interactionHoldSlider != null)
@@ -119,6 +120,16 @@ namespace AsylumHorror.UI
         {
             if (localController == null || localStatus == null)
             {
+                if (statusText != null)
+                {
+                    statusText.gameObject.SetActive(false);
+                }
+
+                if (abilityText != null)
+                {
+                    abilityText.gameObject.SetActive(false);
+                }
+
                 ApplyStressVisuals(0f, 0f);
                 return;
             }
@@ -135,7 +146,9 @@ namespace AsylumHorror.UI
 
             if (statusText != null)
             {
-                statusText.text = BuildLocalStatusText();
+                string localStatusText = BuildLocalStatusText();
+                statusText.text = localStatusText;
+                statusText.gameObject.SetActive(!string.IsNullOrWhiteSpace(localStatusText));
             }
 
             if (hookTimerSlider != null)
@@ -163,7 +176,9 @@ namespace AsylumHorror.UI
 
             if (abilityText != null)
             {
-                abilityText.text = BuildAbilityText(stress01);
+                string abilityPrompt = BuildAbilityText(stress01);
+                abilityText.text = abilityPrompt;
+                abilityText.gameObject.SetActive(!string.IsNullOrWhiteSpace(abilityPrompt));
             }
             ApplyStressVisuals(stress01, reveal01);
         }
@@ -269,20 +284,34 @@ namespace AsylumHorror.UI
             if (players == null || players.Length == 0)
             {
                 teammatesText.text = string.Empty;
+                teammatesText.gameObject.SetActive(false);
                 return;
             }
 
             System.Text.StringBuilder builder = new System.Text.StringBuilder();
-            builder.Append("Team\n");
+            builder.Append("Others\n");
             int index = 1;
+            bool showPanel = false;
             foreach (NetworkPlayerStatus player in players)
             {
-                string marker = player == localStatus ? "You" : $"P{index}";
-                builder.Append(marker).Append(": ").Append(BuildTeammateStateText(player)).Append('\n');
+                if (player == localStatus)
+                {
+                    index++;
+                    continue;
+                }
+
+                string teammateState = BuildTeammateStateText(player);
+                if (teammateState != "Active")
+                {
+                    showPanel = true;
+                }
+
+                builder.Append($"P{index}").Append(": ").Append(teammateState).Append('\n');
                 index++;
             }
 
-            teammatesText.text = builder.ToString().TrimEnd();
+            teammatesText.text = showPanel ? builder.ToString().TrimEnd() : string.Empty;
+            teammatesText.gameObject.SetActive(showPanel);
         }
 
         private string BuildRoundSummary()
@@ -332,21 +361,21 @@ namespace AsylumHorror.UI
 
             if (localStatus.IsHidden)
             {
-                return "Status: Holding breath";
+                return "Holding breath";
             }
 
             return localStatus.Condition switch
             {
-                PlayerCondition.Healthy when localStatus.FocusAbilityActive => "Status: Hands steady",
-                PlayerCondition.Healthy => "Status: Stable",
-                PlayerCondition.Injured when localStatus.HasRescueTrauma => "Status: Wounded and shaking",
-                PlayerCondition.Injured => "Status: Wounded",
-                PlayerCondition.Knocked => "Status: Down",
-                PlayerCondition.Carried => "Status: Taken",
-                PlayerCondition.Hooked => "Status: On the hook",
-                PlayerCondition.Dead => "Status: Lost",
-                PlayerCondition.Escaped => "Status: Out",
-                _ => "Status: Strained"
+                PlayerCondition.Healthy when localStatus.FocusAbilityActive => "Hands steady",
+                PlayerCondition.Healthy => string.Empty,
+                PlayerCondition.Injured when localStatus.HasRescueTrauma => "Wounded and shaking",
+                PlayerCondition.Injured => "Wounded",
+                PlayerCondition.Knocked => "Down",
+                PlayerCondition.Carried => "Taken",
+                PlayerCondition.Hooked => "On the hook",
+                PlayerCondition.Dead => "Lost",
+                PlayerCondition.Escaped => "Out",
+                _ => "Strained"
             };
         }
 

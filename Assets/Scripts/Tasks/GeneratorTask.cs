@@ -38,7 +38,7 @@ namespace AsylumHorror.Tasks
 
         public override string GetPrompt(NetworkPlayerStatus player)
         {
-            return activated ? "Generator Activated" : "Hold E: Start Generator";
+            return activated ? string.Empty : "Hold E: Wake breaker";
         }
 
         [Server]

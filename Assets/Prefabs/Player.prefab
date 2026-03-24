@@ -862,6 +862,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5266894712205661492}
   - component: {fileID: 687927112028232778}
+  - component: {fileID: 5743780111258234831}
   - component: {fileID: 3498110584138003802}
   m_Layer: 0
   m_Name: PlayerCamera
@@ -937,6 +938,30 @@ Camera:
   m_OcclusionCulling: 0
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
+--- !u!114 &5743780111258234831
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7813884607808165995}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1e9f77d76177ba64b877c8156eea5c5c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AsylumHorror.World.HorrorScreenFX
+  menuProfile: 0
+  exposure: 0.91
+  contrast: 1.08
+  saturation: 0.84
+  tint: {r: 0.86, g: 0.94, b: 0.91, a: 1}
+  vignette: 0.31
+  grain: 0.03
+  bloomThreshold: 0.66
+  bloomStrength: 0.035
+  stressVignetteBoost: 0.14
+  stressGrainBoost: 0.02
+  effectShader: {fileID: 4800000, guid: 458a70363d2b32f45928f4f3d0445424, type: 3}
 --- !u!81 &3498110584138003802
 AudioListener:
   m_ObjectHideFlags: 0
