@@ -116,6 +116,7 @@ namespace AsylumHorror.Monster
         private double attackResolveAt;
         private double investigateListenEndsAt;
         private double searchListenEndsAt;
+        private double probeAdvanceAt;
         private double nextFootstepAt;
         private HookPoint targetHookPoint;
         private double carryStartedAt;
@@ -209,6 +210,7 @@ namespace AsylumHorror.Monster
             attackResolveAt = 0;
             investigateListenEndsAt = 0;
             searchListenEndsAt = 0;
+            probeAdvanceAt = 0;
             probeHoldEndsAt = 0;
             memory.Reset(transform.position);
 
@@ -502,7 +504,7 @@ namespace AsylumHorror.Monster
             NetworkPlayerStatus target = ResolveChaseTarget();
             if (target == null || !target.IsMonsterTargetable)
             {
-                BeginSearch(ResolveSearchAnchor(lastKnownTargetPosition == Vector3.zero ? transform.position : lastKnownTargetPosition));
+                BeginSuspicious(ResolveSearchAnchor(lastKnownTargetPosition == Vector3.zero ? transform.position : lastKnownTargetPosition));
                 return;
             }
 
@@ -552,7 +554,7 @@ namespace AsylumHorror.Monster
 
             if (NetworkTime.time - chaseStartedAt >= maxChaseDuration && (!visibleNow || distance >= 10f))
             {
-                BeginSearch(ResolveSearchAnchor(lastKnownTargetPosition == Vector3.zero ? transform.position : lastKnownTargetPosition));
+                BeginSuspicious(ResolveSearchAnchor(lastKnownTargetPosition == Vector3.zero ? transform.position : lastKnownTargetPosition));
                 return;
             }
 
@@ -770,6 +772,7 @@ namespace AsylumHorror.Monster
             interestPoint = worldPoint;
             stateEndsAt = NetworkTime.time + investigateTimeout;
             investigateListenEndsAt = 0d;
+            probeAdvanceAt = 0d;
             probeHoldEndsAt = 0d;
             TrySetDestination(interestPoint);
             SetState(MonsterState.InvestigateSound);
@@ -783,6 +786,7 @@ namespace AsylumHorror.Monster
             interestPoint = ResolveSearchAnchor(worldPoint);
             stateEndsAt = NetworkTime.time + suspiciousDuration;
             searchListenEndsAt = 0d;
+            probeAdvanceAt = 0d;
             probeHoldEndsAt = 0d;
             RebuildSearchPlan(interestPoint, 4);
             SetState(MonsterState.Suspicious);
@@ -796,6 +800,7 @@ namespace AsylumHorror.Monster
             interestPoint = ResolveSearchAnchor(centerPoint);
             stateEndsAt = NetworkTime.time + searchDuration;
             searchListenEndsAt = 0d;
+            probeAdvanceAt = 0d;
             probeHoldEndsAt = 0d;
             nextSearchPointAt = 0d;
             RebuildSearchPlan(interestPoint);
@@ -1113,6 +1118,7 @@ namespace AsylumHorror.Monster
             }
 
             memory.SetSearchPlan(validatedPlan);
+            probeAdvanceAt = 0d;
             probeHoldEndsAt = 0d;
             currentSearchPoint = anchor;
         }
@@ -1264,6 +1270,12 @@ namespace AsylumHorror.Monster
 
             if (!reached)
             {
+                if (probeAdvanceAt <= 0d)
+                {
+                    float timeout = Mathf.Max(1.2f, probe.DwellSeconds + 1.6f);
+                    probeAdvanceAt = NetworkTime.time + timeout;
+                }
+
                 bool needsDestination = !navMeshAgent.hasPath ||
                                         IsMovementStalled(reachDistance + 0.75f) ||
                                         NetworkTime.time >= nextPathRefreshAt ||
@@ -1276,10 +1288,20 @@ namespace AsylumHorror.Monster
                     nextPathRefreshAt = NetworkTime.time + pathRefreshInterval * 0.78f;
                 }
 
+                if (NetworkTime.time >= probeAdvanceAt)
+                {
+                    probeAdvanceAt = 0d;
+                    probeHoldEndsAt = 0d;
+                    memory.AdvanceProbe();
+                    nextPathRefreshAt = 0d;
+                    return memory.RemainingProbeCount > 0;
+                }
+
                 LookToward(probe.FocusPoint, turnSpeed);
                 return true;
             }
 
+            probeAdvanceAt = 0d;
             if (probeHoldEndsAt <= 0d)
             {
                 probeHoldEndsAt = NetworkTime.time + probe.DwellSeconds;
@@ -1293,6 +1315,7 @@ namespace AsylumHorror.Monster
             }
 
             probeHoldEndsAt = 0d;
+            probeAdvanceAt = 0d;
             memory.AdvanceProbe();
             nextPathRefreshAt = 0d;
             return memory.RemainingProbeCount > 0;
